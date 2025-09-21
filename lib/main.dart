@@ -18,6 +18,8 @@ const int _sampleBufferSize = 8;
 const Duration _historyInterval = Duration(seconds: 10);
 const int _maxHistoryEntries = 200;
 const String _historyStorageKey = 'locationHistory';
+const Duration _sampleRetentionDuration = Duration(seconds: 12);
+const double _defaultFollowZoom = 17;
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -60,6 +62,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
 
   bool _mapReady = false;
   bool _permissionDenied = false;
+  bool _hasCenteredOnUser = false;
 
   LatLng _fallbackCenter = const LatLng(23.8103, 90.4125);
   LatLng? _pendingCenter;
@@ -241,28 +244,37 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
           DateTime.now().millisecondsSinceEpoch,
     );
 
-    if (_samples.length >= _sampleBufferSize) {
-      _samples.removeAt(0);
-    }
+    _samples.removeWhere(
+      (existing) =>
+          sample.timestampMs - existing.timestampMs >
+          _sampleRetentionDuration.inMilliseconds,
+    );
     _samples.add(sample);
+    if (_samples.length > _sampleBufferSize) {
+      _samples.removeRange(0, _samples.length - _sampleBufferSize);
+    }
 
-    final best = _samples.reduce(
+    final latest = _samples.last;
+    final bestAccuracySample = _samples.reduce(
       (a, b) => a.accuracy <= b.accuracy ? a : b,
     );
 
-    final location = LatLng(best.latitude, best.longitude);
+    final location = LatLng(latest.latitude, latest.longitude);
     final result = _evaluateGeofence(location);
 
     if (!mounted) return;
     setState(() {
       _currentLocation = location;
-      _currentAccuracy = best.accuracy;
+      _currentAccuracy = bestAccuracySample.accuracy;
       _insideTarget = result.inside;
       _statusMessage = result.statusMessage;
       _errorMessage = null;
     });
 
-    _moveMap(location, 17);
+    if (!_hasCenteredOnUser) {
+      _hasCenteredOnUser = true;
+      _moveMap(location, _defaultFollowZoom);
+    }
   }
 
   _GeofenceResult _evaluateGeofence(LatLng position) {
@@ -309,6 +321,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     setState(() {
       _statusMessage =
           'Calibrating — move a little and allow GPS to warm up...';
+      _hasCenteredOnUser = false;
     });
 
     _samples.clear();
@@ -360,24 +373,27 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
       point: _currentLocation!,
       width: 46,
       height: 46,
-      child: Tooltip(
-        message: 'You are here\nAccuracy: $accuracyText',
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.blueAccent,
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 3),
-            boxShadow: const [
-              BoxShadow(
-                color: Colors.black26,
-                blurRadius: 8,
-                offset: Offset(0, 4),
-              )
-            ],
-          ),
-          child: const Icon(
-            Icons.location_on,
-            color: Colors.white,
+      child: GestureDetector(
+        onTap: _onCurrentLocationMarkerTap,
+        child: Tooltip(
+          message: 'You are here\nAccuracy: $accuracyText',
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.blueAccent,
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 3),
+              boxShadow: const [
+                BoxShadow(
+                  color: Colors.black26,
+                  blurRadius: 8,
+                  offset: Offset(0, 4),
+                )
+              ],
+            ),
+            child: const Icon(
+              Icons.location_on,
+              color: Colors.white,
+            ),
           ),
         ),
       ),
@@ -392,24 +408,86 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     return _history
         .map(
           (entry) => Marker(
-            
             point: LatLng(entry.latitude, entry.longitude),
             width: 30,
             height: 30,
-            child: Tooltip(
-              message:
-                  'Time: ${DateTime.fromMillisecondsSinceEpoch(entry.timestampMs).toLocal()}\nInside: ${entry.inside}\nAccuracy: ${entry.accuracy.round()} m',
-              child: Container(
-                decoration: BoxDecoration(
-                  color: entry.inside ? Colors.green : Colors.red,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
+            child: GestureDetector(
+              onTap: () => _onHistoryMarkerTap(entry),
+              child: Tooltip(
+                message:
+                    'Time: ${DateTime.fromMillisecondsSinceEpoch(entry.timestampMs).toLocal()}\nInside: ${entry.inside}\nAccuracy: ${entry.accuracy.round()} m',
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: entry.inside ? Colors.green : Colors.red,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
                 ),
               ),
             ),
           ),
         )
         .toList();
+  }
+
+  void _onCurrentLocationMarkerTap() {
+    final location = _currentLocation;
+    if (location == null) {
+      return;
+    }
+    final accuracyText =
+        _currentAccuracy != null ? '${_currentAccuracy!.toStringAsFixed(1)} m' : 'Unavailable';
+    final insideText = _insideTarget ? 'Inside the target area' : 'Outside the target area';
+    _showMarkerDetails(
+      title: 'Your location',
+      content: [
+        Text('Latitude: ${location.latitude.toStringAsFixed(6)}'),
+        Text('Longitude: ${location.longitude.toStringAsFixed(6)}'),
+        Text('Accuracy: $accuracyText'),
+        Text(insideText),
+        const SizedBox(height: 8),
+        Text(_statusMessage),
+      ],
+    );
+  }
+
+  void _onHistoryMarkerTap(LocationHistoryEntry entry) {
+    final timestamp =
+        DateTime.fromMillisecondsSinceEpoch(entry.timestampMs).toLocal().toString();
+    final insideText = entry.inside ? 'Yes' : 'No';
+    _showMarkerDetails(
+      title: 'Recorded location',
+      content: [
+        Text('Latitude: ${entry.latitude.toStringAsFixed(6)}'),
+        Text('Longitude: ${entry.longitude.toStringAsFixed(6)}'),
+        Text('Accuracy: ${entry.accuracy.toStringAsFixed(1)} m'),
+        Text('Inside boundary: $insideText'),
+        Text('Time: $timestamp'),
+      ],
+    );
+  }
+
+  void _showMarkerDetails({required String title, required List<Widget> content}) {
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(title),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: content,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Widget _buildStatusCard() {
