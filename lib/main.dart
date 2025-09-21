@@ -349,15 +349,19 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
   }
 
   List<Polygon> _buildPolygons() {
+    final Color borderColor = Colors.blue.shade600;
+    final Color fillColor = const Color(0xFF42A5F5).withOpacity(0.2);
+
     return _polygons
         .where((polygon) => polygon.outer.isNotEmpty)
         .map(
           (polygon) => Polygon(
             points: polygon.outer,
             holePointsList: polygon.holes,
-            color: Colors.blueAccent.withOpacity(0.18),
-            borderColor: Colors.blueAccent,
-            borderStrokeWidth: 3,
+            color: fillColor,
+            borderColor: borderColor,
+            borderStrokeWidth: 2.8,
+            isFilled: true,
           ),
         )
         .toList();
@@ -371,19 +375,16 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
         _currentAccuracy != null ? '${_currentAccuracy!.round()} m' : '—';
     return Marker(
       point: _currentLocation!,
-      width: 30,
-      height: 30,
+      width: 48,
+      height: 48,
+      alignment: Alignment.center,
       child: GestureDetector(
         onTap: _onCurrentLocationMarkerTap,
         child: Tooltip(
           message: 'You are here\nAccuracy: $accuracyText',
-          child:  const Icon(
-              Icons.location_on,
-              color: Colors.blue,
-            ),
-          ),
+          child: const _CurrentLocationIndicator(),
         ),
-    
+      ),
     );
   }
 
@@ -582,6 +583,55 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CurrentLocationIndicator extends StatelessWidget {
+  const _CurrentLocationIndicator();
+
+  @override
+  Widget build(BuildContext context) {
+    final Color haloColor = Colors.blueAccent.shade200;
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: haloColor.withOpacity(0.2),
+          ),
+        ),
+        Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.blueAccent,
+            border: Border.all(
+              color: Colors.white,
+              width: 3,
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x33000000),
+                blurRadius: 6,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          width: 8,
+          height: 8,
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white,
+          ),
+        ),
+      ],
     );
   }
 }
