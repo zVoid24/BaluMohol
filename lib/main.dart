@@ -371,32 +371,19 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
         _currentAccuracy != null ? '${_currentAccuracy!.round()} m' : '—';
     return Marker(
       point: _currentLocation!,
-      width: 46,
-      height: 46,
+      width: 30,
+      height: 30,
       child: GestureDetector(
         onTap: _onCurrentLocationMarkerTap,
         child: Tooltip(
           message: 'You are here\nAccuracy: $accuracyText',
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.blueAccent,
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 3),
-              boxShadow: const [
-                BoxShadow(
-                  color: Colors.black26,
-                  blurRadius: 8,
-                  offset: Offset(0, 4),
-                )
-              ],
-            ),
-            child: const Icon(
+          child:  const Icon(
               Icons.location_on,
-              color: Colors.white,
+              color: Colors.blue,
             ),
           ),
         ),
-      ),
+    
     );
   }
 
@@ -409,8 +396,8 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
         .map(
           (entry) => Marker(
             point: LatLng(entry.latitude, entry.longitude),
-            width: 30,
-            height: 30,
+            width: 20,
+            height: 20,
             child: GestureDetector(
               onTap: () => _onHistoryMarkerTap(entry),
               child: Tooltip(
