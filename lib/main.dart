@@ -510,26 +510,24 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
                   style: const TextStyle(color: Colors.red),
                 ),
               ],
-              const SizedBox(height: 8),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ElevatedButton(
-                    onPressed: _permissionDenied ? null : _calibrateNow,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: const Text('Calibrate now'),
-                  ),
-                ],
-              ),
-              
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _goToCurrentLocation() {
+    final location = _currentLocation;
+    if (location != null) {
+      _moveMap(location, _defaultFollowZoom);
+      return;
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Current location not available yet.'),
       ),
     );
   }
@@ -540,6 +538,28 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     final historyMarkers = _buildHistoryMarkers();
 
     return Scaffold(
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButton: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            FloatingActionButton(
+              heroTag: 'current_location_btn',
+              onPressed: _goToCurrentLocation,
+              tooltip: 'Go to current location',
+              child: const Icon(Icons.my_location),
+            ),
+            const SizedBox(height: 12),
+            FloatingActionButton.extended(
+              heroTag: 'calibrate_btn',
+              onPressed: _permissionDenied ? null : _calibrateNow,
+              label: const Text('Calibrate now'),
+              icon: const Icon(Icons.compass_calibration),
+            ),
+          ],
+        ),
+      ),
       body: Stack(
         children: [
           FlutterMap(
@@ -576,10 +596,14 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
                 ),
             ],
           ),
-          Positioned(
-            left: 12,
-            top: 12,
-            child: _buildStatusCard(),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: _buildStatusCard(),
+              ),
+            ),
           ),
         ],
       ),
