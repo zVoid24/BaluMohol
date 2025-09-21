@@ -360,7 +360,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
       point: _currentLocation!,
       width: 46,
       height: 46,
-      builder: (context) => Tooltip(
+      child: Tooltip(
         message: 'You are here\nAccuracy: $accuracyText',
         child: Container(
           decoration: BoxDecoration(
@@ -376,7 +376,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
             ],
           ),
           child: const Icon(
-            Icons.my_location,
+            Icons.location_on,
             color: Colors.white,
           ),
         ),
@@ -392,10 +392,11 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     return _history
         .map(
           (entry) => Marker(
+            
             point: LatLng(entry.latitude, entry.longitude),
             width: 30,
             height: 30,
-            builder: (context) => Tooltip(
+            child: Tooltip(
               message:
                   'Time: ${DateTime.fromMillisecondsSinceEpoch(entry.timestampMs).toLocal()}\nInside: ${entry.inside}\nAccuracy: ${entry.accuracy.round()} m',
               child: Container(
@@ -459,17 +460,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              const Text(
-                'Tip:',
-                style: TextStyle(fontSize: 12, color: Colors.black87),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                '• On Windows: Settings → Privacy & Security → Location → Allow apps to access location.\n'
-                '• For best results, use a mobile device with GPS.',
-                style: TextStyle(fontSize: 12, color: Colors.black87),
-              ),
+              
             ],
           ),
         ),
