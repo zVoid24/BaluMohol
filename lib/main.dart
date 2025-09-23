@@ -27,7 +27,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Geo-fenced Map',
+      title: 'জিওফেন্স মানচিত্র',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
@@ -53,7 +53,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
   LatLng? _currentLocation;
   double? _currentAccuracy;
   bool _insideTarget = false;
-  String _statusMessage = 'Loading boundary...';
+  String _statusMessage = 'সীমানা লোড হচ্ছে...';
   String? _errorMessage;
 
   SharedPreferences? _prefs;
@@ -95,7 +95,6 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
   Future<void> _loadGeoJsonBoundary() async {
     try {
       final raw = await rootBundle.loadString('assets/output.geojson');
-      print(raw);
       final Map<String, dynamic> data =
           json.decode(raw) as Map<String, dynamic>;
       final polygons = _parsePolygons(data);
@@ -108,7 +107,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
         if (center != null) {
           _fallbackCenter = center;
         }
-        _statusMessage = 'Waiting for GPS fix...';
+        _statusMessage = 'জিপিএস সিগন্যালের জন্য অপেক্ষা করা হচ্ছে...';
       });
       if (center != null) {
         _moveMap(center, 16);
@@ -116,7 +115,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _statusMessage = 'Failed to load office boundary.';
+        _statusMessage = 'কার্যালয়ের সীমানা লোড করা যায়নি।';
         _errorMessage = e.toString();
       });
     }
@@ -187,7 +186,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
             if (!mounted) return;
             setState(() {
               _errorMessage = error.toString();
-              _statusMessage = 'Error obtaining location.';
+              _statusMessage = 'অবস্থান পাওয়ার সময় ত্রুটি ঘটেছে।';
             });
           },
         );
@@ -198,8 +197,8 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     if (!serviceEnabled) {
       if (!mounted) return false;
       setState(() {
-        _statusMessage = 'Location services are disabled on this device.';
-        _errorMessage = 'Enable location services to track your position.';
+        _statusMessage = 'এই ডিভাইসে অবস্থান সেবা বন্ধ আছে।';
+        _errorMessage = 'আপনার অবস্থান অনুসরণ করতে অবস্থান সেবা চালু করুন।';
       });
       return false;
     }
@@ -213,8 +212,8 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
       if (!mounted) return false;
       setState(() {
         _permissionDenied = true;
-        _statusMessage = 'Location permission denied.';
-        _errorMessage = 'Grant location access to enable GPS tracking.';
+        _statusMessage = 'অবস্থান অনুমতি প্রত্যাখ্যান করা হয়েছে।';
+        _errorMessage = 'জিপিএস ট্র্যাকিং চালু রাখতে অবস্থান অনুমতি দিন।';
       });
       return false;
     }
@@ -223,9 +222,9 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
       if (!mounted) return false;
       setState(() {
         _permissionDenied = true;
-        _statusMessage = 'Location permission permanently denied.';
+        _statusMessage = 'অবস্থান অনুমতি স্থায়ীভাবে প্রত্যাখ্যান করা হয়েছে।';
         _errorMessage =
-            'Please enable location permissions from system settings to continue.';
+            'চালিয়ে যেতে সিস্টেম সেটিংস থেকে অবস্থান অনুমতি সক্রিয় করুন।';
       });
       return false;
     }
@@ -234,8 +233,8 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     setState(() {
       _permissionDenied = false;
       _errorMessage = null;
-      if (_statusMessage == 'Loading boundary...') {
-        _statusMessage = 'Waiting for GPS fix...';
+      if (_statusMessage == 'সীমানা লোড হচ্ছে...') {
+        _statusMessage = 'জিপিএস সিগন্যালের জন্য অপেক্ষা করা হচ্ছে...';
       }
     });
     return true;
@@ -288,7 +287,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     if (_polygons.isEmpty) {
       return const _GeofenceResult(
         inside: false,
-        statusMessage: 'Boundary not available.',
+        statusMessage: 'সীমানার তথ্য পাওয়া যায়নি।',
       );
     }
 
@@ -309,17 +308,16 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     if (inside) {
       return const _GeofenceResult(
         inside: true,
-        statusMessage: '✅ You are inside the target area!',
+        statusMessage: '✅ আপনি লক্ষ্য এলাকায় আছেন!',
       );
     }
 
-    final distanceKm = minDistance.isFinite
-        ? (minDistance / 1000).toStringAsFixed(2)
+    final distanceText = minDistance.isFinite
+        ? _formatKilometers(minDistance / 1000)
         : '—';
     return _GeofenceResult(
       inside: false,
-      statusMessage:
-          '❌আপনি লক্ষ্য/টার্গেট এলাকার বাইরে আছেন। দূরত্ব: $distanceKm কি.মি.',
+      statusMessage: '❌ আপনি লক্ষ্য এলাকায় নেই। দূরত্ব: $distanceText।',
     );
   }
 
@@ -332,7 +330,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     if (!mounted) return;
     setState(() {
       _statusMessage =
-          'Calibrating — move a little and allow GPS to warm up...';
+          'ক্যালিব্রেশন চলছে — সামান্য নড়াচড়া করুন এবং জিপিএস স্থিতিশীল হওয়ার জন্য অপেক্ষা করুন...';
       _hasCenteredOnUser = false;
     });
 
@@ -346,7 +344,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = 'Calibration failed: $e';
+        _errorMessage = 'ক্যালিব্রেশন ব্যর্থ হয়েছে: $e';
       });
     }
   }
@@ -383,9 +381,10 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     if (_currentLocation == null) {
       return null;
     }
-    final accuracyText = _currentAccuracy != null
-        ? '${_currentAccuracy!.round()} m'
-        : '—';
+    final accuracyValue = _currentAccuracy;
+    final accuracyText = accuracyValue != null
+        ? _formatMeters(accuracyValue, fractionDigits: 0)
+        : 'উপলব্ধ নয়';
     return Marker(
       point: _currentLocation!,
       width: 48,
@@ -394,7 +393,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
       child: GestureDetector(
         onTap: _onCurrentLocationMarkerTap,
         child: Tooltip(
-          message: 'You are here\nAccuracy: $accuracyText',
+          message: 'আপনি এখানে আছেন\nসঠিকতা: $accuracyText',
           child: const _CurrentLocationIndicator(),
         ),
       ),
@@ -416,7 +415,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
               onTap: () => _onHistoryMarkerTap(entry),
               child: Tooltip(
                 message:
-                    'Time: ${DateTime.fromMillisecondsSinceEpoch(entry.timestampMs).toLocal()}\nInside: ${entry.inside}\nAccuracy: ${entry.accuracy.round()} m',
+                    'সময়: ${_formatTimestamp(entry.timestampMs)}\nলক্ষ্য এলাকায় আছেন: ${entry.inside ? 'হ্যাঁ' : 'না'}\nসঠিকতা: ${_formatMeters(entry.accuracy, fractionDigits: 0)}',
                 child: Container(
                   decoration: BoxDecoration(
                     color: entry.inside ? Colors.green : Colors.red,
@@ -436,18 +435,18 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     if (location == null) {
       return;
     }
-    final accuracyText = _currentAccuracy != null
-        ? '${_currentAccuracy!.toStringAsFixed(1)} m'
-        : 'Unavailable';
-    final insideText = _insideTarget
-        ? 'Inside the target area'
-        : 'Outside the target area';
+    final accuracyValue = _currentAccuracy;
+    final accuracyText = accuracyValue != null
+        ? _formatMeters(accuracyValue, fractionDigits: 1)
+        : 'উপলব্ধ নয়';
+    final insideText =
+        _insideTarget ? 'আপনি লক্ষ্য এলাকায় আছেন' : 'আপনি লক্ষ্য এলাকায় নেই';
     _showMarkerDetails(
-      title: 'Your location',
+      title: 'আপনার বর্তমান অবস্থান',
       content: [
-        Text('Latitude: ${location.latitude.toStringAsFixed(6)}'),
-        Text('Longitude: ${location.longitude.toStringAsFixed(6)}'),
-        Text('Accuracy: $accuracyText'),
+        Text('অক্ষাংশ: ${_formatCoordinate(location.latitude)}'),
+        Text('দ্রাঘিমাংশ: ${_formatCoordinate(location.longitude)}'),
+        Text('সঠিকতা: $accuracyText'),
         Text(insideText),
         const SizedBox(height: 8),
         Text(_statusMessage),
@@ -456,18 +455,16 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
   }
 
   void _onHistoryMarkerTap(LocationHistoryEntry entry) {
-    final timestamp = DateTime.fromMillisecondsSinceEpoch(
-      entry.timestampMs,
-    ).toLocal().toString();
-    final insideText = entry.inside ? 'Yes' : 'No';
+    final timestamp = _formatTimestamp(entry.timestampMs);
+    final insideText = entry.inside ? 'হ্যাঁ' : 'না';
     _showMarkerDetails(
-      title: 'Recorded location',
+      title: 'সংরক্ষিত অবস্থান',
       content: [
-        Text('Latitude: ${entry.latitude.toStringAsFixed(6)}'),
-        Text('Longitude: ${entry.longitude.toStringAsFixed(6)}'),
-        Text('Accuracy: ${entry.accuracy.toStringAsFixed(1)} m'),
-        Text('Inside boundary: $insideText'),
-        Text('Time: $timestamp'),
+        Text('অক্ষাংশ: ${_formatCoordinate(entry.latitude)}'),
+        Text('দ্রাঘিমাংশ: ${_formatCoordinate(entry.longitude)}'),
+        Text('সঠিকতা: ${_formatMeters(entry.accuracy, fractionDigits: 1)}'),
+        Text('লক্ষ্য সীমানার ভেতরে: $insideText'),
+        Text('সময়: $timestamp'),
       ],
     );
   }
@@ -490,7 +487,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Close'),
+              child: const Text('বন্ধ করুন'),
             ),
           ],
         );
@@ -499,9 +496,10 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
   }
 
   Widget _buildStatusCard() {
-    final accuracyText = _currentAccuracy != null
-        ? '${_currentAccuracy!.round()} m'
-        : 'waiting...';
+    final accuracyValue = _currentAccuracy;
+    final accuracyText = accuracyValue != null
+        ? _formatMeters(accuracyValue, fractionDigits: 0)
+        : 'অপেক্ষা চলছে...';
 
     return Card(
       margin: EdgeInsets.zero,
@@ -544,7 +542,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Current location not available yet.')),
+      const SnackBar(content: Text('বর্তমান অবস্থান এখনও পাওয়া যায়নি।')),
     );
   }
 
@@ -563,14 +561,14 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
             FloatingActionButton(
               heroTag: 'current_location_btn',
               onPressed: _goToCurrentLocation,
-              tooltip: 'Go to current location',
+              tooltip: 'বর্তমান অবস্থানে যান',
               child: const Icon(Icons.my_location),
             ),
             const SizedBox(height: 12),
             FloatingActionButton.extended(
               heroTag: 'calibrate_btn',
               onPressed: _permissionDenied ? null : _calibrateNow,
-              label: const Text('Calibrate now'),
+              label: const Text('এখন ক্যালিব্রেট করুন'),
               icon: const Icon(Icons.compass_calibration),
             ),
           ],
@@ -729,6 +727,67 @@ class _GeofenceResult {
 
   final bool inside;
   final String statusMessage;
+}
+
+const List<String> _banglaDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+
+String _toBanglaDigits(String value) {
+  final buffer = StringBuffer();
+  for (final codeUnit in value.codeUnits) {
+    if (codeUnit >= 48 && codeUnit <= 57) {
+      buffer.write(_banglaDigits[codeUnit - 48]);
+    } else {
+      buffer.write(String.fromCharCode(codeUnit));
+    }
+  }
+  return buffer.toString();
+}
+
+String _trimTrailingZeros(String value) {
+  var result = value;
+  if (!result.contains('.')) {
+    return result;
+  }
+  while (result.endsWith('0')) {
+    result = result.substring(0, result.length - 1);
+  }
+  if (result.endsWith('.')) {
+    result = result.substring(0, result.length - 1);
+  }
+  return result;
+}
+
+String _formatNumber(num value, {int fractionDigits = 0}) {
+  String text;
+  if (fractionDigits <= 0) {
+    text = value.round().toString();
+  } else {
+    text = _trimTrailingZeros(value.toStringAsFixed(fractionDigits));
+  }
+  return _toBanglaDigits(text);
+}
+
+String _formatMeters(num value, {int fractionDigits = 0}) {
+  return '${_formatNumber(value, fractionDigits: fractionDigits)} মিটার';
+}
+
+String _formatKilometers(double value, {int fractionDigits = 2}) {
+  return '${_formatNumber(value, fractionDigits: fractionDigits)} কিমি';
+}
+
+String _formatCoordinate(double value) {
+  return _formatNumber(value, fractionDigits: 6);
+}
+
+String _formatTimestamp(int timestampMs) {
+  final dt = DateTime.fromMillisecondsSinceEpoch(timestampMs).toLocal();
+  final year = dt.year.toString().padLeft(4, '0');
+  final month = dt.month.toString().padLeft(2, '0');
+  final day = dt.day.toString().padLeft(2, '0');
+  final hour = dt.hour.toString().padLeft(2, '0');
+  final minute = dt.minute.toString().padLeft(2, '0');
+  final second = dt.second.toString().padLeft(2, '0');
+  return _toBanglaDigits('$year-$month-$day $hour:$minute:$second');
 }
 
 List<_PolygonFeature> _parsePolygons(Map<String, dynamic> data) {
