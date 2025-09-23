@@ -79,7 +79,10 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     await _loadGeoJsonBoundary();
     await _loadHistory();
     await _startLocationTracking();
-    _historyTimer = Timer.periodic(_historyInterval, (_) => _recordHistoryEntry());
+    _historyTimer = Timer.periodic(
+      _historyInterval,
+      (_) => _recordHistoryEntry(),
+    );
   }
 
   @override
@@ -91,8 +94,10 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
 
   Future<void> _loadGeoJsonBoundary() async {
     try {
-      final raw = await rootBundle.loadString('assets/office.geojson');
-      final Map<String, dynamic> data = json.decode(raw) as Map<String, dynamic>;
+      final raw = await rootBundle.loadString('assets/output.geojson');
+      print(raw);
+      final Map<String, dynamic> data =
+          json.decode(raw) as Map<String, dynamic>;
       final polygons = _parsePolygons(data);
       final center = _computeBoundsCenter(polygons);
       if (!mounted) return;
@@ -173,18 +178,19 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
       distanceFilter: 0,
     );
 
-    _positionSubscription = Geolocator.getPositionStream(locationSettings: settings).listen(
-      (position) {
-        _handlePosition(position);
-      },
-      onError: (Object error) {
-        if (!mounted) return;
-        setState(() {
-          _errorMessage = error.toString();
-          _statusMessage = 'Error obtaining location.';
-        });
-      },
-    );
+    _positionSubscription =
+        Geolocator.getPositionStream(locationSettings: settings).listen(
+          (position) {
+            _handlePosition(position);
+          },
+          onError: (Object error) {
+            if (!mounted) return;
+            setState(() {
+              _errorMessage = error.toString();
+              _statusMessage = 'Error obtaining location.';
+            });
+          },
+        );
   }
 
   Future<bool> _ensurePermission() async {
@@ -240,7 +246,8 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
       latitude: position.latitude,
       longitude: position.longitude,
       accuracy: position.accuracy,
-      timestampMs: position.timestamp?.millisecondsSinceEpoch ??
+      timestampMs:
+          position.timestamp?.millisecondsSinceEpoch ??
           DateTime.now().millisecondsSinceEpoch,
     );
 
@@ -293,7 +300,10 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
         inside = true;
         break;
       }
-      minDistance = math.min(minDistance, _distanceToPolygon(position, polygon));
+      minDistance = math.min(
+        minDistance,
+        _distanceToPolygon(position, polygon),
+      );
     }
 
     if (inside) {
@@ -303,11 +313,13 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
       );
     }
 
-    final distanceKm = minDistance.isFinite ? (minDistance / 1000).toStringAsFixed(2) : '—';
+    final distanceKm = minDistance.isFinite
+        ? (minDistance / 1000).toStringAsFixed(2)
+        : '—';
     return _GeofenceResult(
       inside: false,
       statusMessage:
-          '❌ You are outside the target area. Distance: $distanceKm km',
+          '❌আপনি লক্ষ্য/টার্গেট এলাকার বাইরে আছেন। দূরত্ব: $distanceKm কি.মি.',
     );
   }
 
@@ -371,8 +383,9 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     if (_currentLocation == null) {
       return null;
     }
-    final accuracyText =
-        _currentAccuracy != null ? '${_currentAccuracy!.round()} m' : '—';
+    final accuracyText = _currentAccuracy != null
+        ? '${_currentAccuracy!.round()} m'
+        : '—';
     return Marker(
       point: _currentLocation!,
       width: 48,
@@ -423,9 +436,12 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     if (location == null) {
       return;
     }
-    final accuracyText =
-        _currentAccuracy != null ? '${_currentAccuracy!.toStringAsFixed(1)} m' : 'Unavailable';
-    final insideText = _insideTarget ? 'Inside the target area' : 'Outside the target area';
+    final accuracyText = _currentAccuracy != null
+        ? '${_currentAccuracy!.toStringAsFixed(1)} m'
+        : 'Unavailable';
+    final insideText = _insideTarget
+        ? 'Inside the target area'
+        : 'Outside the target area';
     _showMarkerDetails(
       title: 'Your location',
       content: [
@@ -440,8 +456,9 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
   }
 
   void _onHistoryMarkerTap(LocationHistoryEntry entry) {
-    final timestamp =
-        DateTime.fromMillisecondsSinceEpoch(entry.timestampMs).toLocal().toString();
+    final timestamp = DateTime.fromMillisecondsSinceEpoch(
+      entry.timestampMs,
+    ).toLocal().toString();
     final insideText = entry.inside ? 'Yes' : 'No';
     _showMarkerDetails(
       title: 'Recorded location',
@@ -455,7 +472,10 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     );
   }
 
-  void _showMarkerDetails({required String title, required List<Widget> content}) {
+  void _showMarkerDetails({
+    required String title,
+    required List<Widget> content,
+  }) {
     if (!mounted) return;
     showDialog<void>(
       context: context,
@@ -479,8 +499,9 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
   }
 
   Widget _buildStatusCard() {
-    final accuracyText =
-        _currentAccuracy != null ? '${_currentAccuracy!.round()} m' : 'waiting...';
+    final accuracyText = _currentAccuracy != null
+        ? '${_currentAccuracy!.round()} m'
+        : 'waiting...';
 
     return Card(
       margin: EdgeInsets.zero,
@@ -496,19 +517,16 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
-                'GPS status',
+                'জিপিএস এর অবস্থা:',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 6),
-              Text('Accuracy: $accuracyText'),
+              Text('সঠিকতা: $accuracyText'),
               const SizedBox(height: 4),
               Text(_statusMessage),
               if (_errorMessage != null) ...[
                 const SizedBox(height: 6),
-                Text(
-                  _errorMessage!,
-                  style: const TextStyle(color: Colors.red),
-                ),
+                Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
               ],
             ],
           ),
@@ -526,9 +544,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Current location not available yet.'),
-      ),
+      const SnackBar(content: Text('Current location not available yet.')),
     );
   }
 
@@ -578,22 +594,16 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                urlTemplate:
+                    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
                 subdomains: const ['a', 'b', 'c'],
                 userAgentPackageName: 'com.example.balumohol',
               ),
               if (_polygons.isNotEmpty)
-                PolygonLayer(
-                  polygons: _buildPolygons(),
-                ),
+                PolygonLayer(polygons: _buildPolygons()),
               if (historyMarkers.isNotEmpty)
-                MarkerLayer(
-                  markers: historyMarkers,
-                ),
-              if (currentMarker != null)
-                MarkerLayer(
-                  markers: [currentMarker],
-                ),
+                MarkerLayer(markers: historyMarkers),
+              if (currentMarker != null) MarkerLayer(markers: [currentMarker]),
             ],
           ),
           SafeArea(
@@ -634,10 +644,7 @@ class _CurrentLocationIndicator extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: Colors.blueAccent,
-            border: Border.all(
-              color: Colors.white,
-              width: 3,
-            ),
+            border: Border.all(color: Colors.white, width: 3),
             boxShadow: const [
               BoxShadow(
                 color: Color(0x33000000),
@@ -675,10 +682,7 @@ class _PositionSample {
 }
 
 class _PolygonFeature {
-  const _PolygonFeature({
-    required this.outer,
-    required this.holes,
-  });
+  const _PolygonFeature({required this.outer, required this.holes});
 
   final List<LatLng> outer;
   final List<List<LatLng>> holes;
@@ -721,10 +725,7 @@ class LocationHistoryEntry {
 }
 
 class _GeofenceResult {
-  const _GeofenceResult({
-    required this.inside,
-    required this.statusMessage,
-  });
+  const _GeofenceResult({required this.inside, required this.statusMessage});
 
   final bool inside;
   final String statusMessage;
@@ -735,7 +736,8 @@ List<_PolygonFeature> _parsePolygons(Map<String, dynamic> data) {
   final polygons = <_PolygonFeature>[];
 
   for (final feature in features) {
-    final geometry = (feature as Map<String, dynamic>)['geometry'] as Map<String, dynamic>?;
+    final geometry =
+        (feature as Map<String, dynamic>)['geometry'] as Map<String, dynamic>?;
     if (geometry == null) continue;
     final type = geometry['type'] as String?;
     final coordinates = geometry['coordinates'];
@@ -765,24 +767,30 @@ _PolygonFeature _polygonFromCoords(List<List<dynamic>> coordinates) {
 }
 
 List<LatLng> _latLngListFromRing(List<dynamic> ring) {
-  return ring
-      .map<LatLng>((coord) {
-        final List<dynamic> pair = coord as List<dynamic>;
-        final lng = (pair[0] as num).toDouble();
-        final lat = (pair[1] as num).toDouble();
-        return LatLng(lat, lng);
-      })
-      .toList();
+  return ring.map<LatLng>((coord) {
+    final List<dynamic> pair = coord as List<dynamic>;
+    final lng = (pair[0] as num).toDouble();
+    final lat = (pair[1] as num).toDouble();
+    return LatLng(lat, lng);
+  }).toList();
 }
 
 LatLng? _computeBoundsCenter(List<_PolygonFeature> polygons) {
   double? minLat, maxLat, minLng, maxLng;
 
   void updateBounds(LatLng point) {
-    minLat = (minLat == null) ? point.latitude : math.min(minLat!, point.latitude);
-    maxLat = (maxLat == null) ? point.latitude : math.max(maxLat!, point.latitude);
-    minLng = (minLng == null) ? point.longitude : math.min(minLng!, point.longitude);
-    maxLng = (maxLng == null) ? point.longitude : math.max(maxLng!, point.longitude);
+    minLat = (minLat == null)
+        ? point.latitude
+        : math.min(minLat!, point.latitude);
+    maxLat = (maxLat == null)
+        ? point.latitude
+        : math.max(maxLat!, point.latitude);
+    minLng = (minLng == null)
+        ? point.longitude
+        : math.min(minLng!, point.longitude);
+    maxLng = (maxLng == null)
+        ? point.longitude
+        : math.max(maxLng!, point.longitude);
   }
 
   for (final polygon in polygons) {
@@ -828,9 +836,13 @@ bool _isPointInsideRing(LatLng point, List<LatLng> ring) {
     final double xj = ring[j].longitude;
     final double yj = ring[j].latitude;
 
-    final bool intersect = ((yi > point.latitude) != (yj > point.latitude)) &&
+    final bool intersect =
+        ((yi > point.latitude) != (yj > point.latitude)) &&
         (point.longitude <
-            (xj - xi) * (point.latitude - yi) / ((yj - yi).abs() < 1e-12 ? 1e-12 : (yj - yi)) + xi);
+            (xj - xi) *
+                    (point.latitude - yi) /
+                    ((yj - yi).abs() < 1e-12 ? 1e-12 : (yj - yi)) +
+                xi);
     if (intersect) inside = !inside;
   }
   return inside;
@@ -872,8 +884,14 @@ double _distanceToSegment(LatLng point, LatLng start, LatLng end) {
   final originLatRad = point.latitude * math.pi / 180;
 
   math.Point<double> project(LatLng p) {
-    final double x = (p.longitude - point.longitude) * math.pi / 180 * earthRadius * math.cos(originLatRad);
-    final double y = (p.latitude - point.latitude) * math.pi / 180 * earthRadius;
+    final double x =
+        (p.longitude - point.longitude) *
+        math.pi /
+        180 *
+        earthRadius *
+        math.cos(originLatRad);
+    final double y =
+        (p.latitude - point.latitude) * math.pi / 180 * earthRadius;
     return math.Point<double>(x, y);
   }
 

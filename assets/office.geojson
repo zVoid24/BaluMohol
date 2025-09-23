@@ -1,1 +1,60 @@
-{"type":"FeatureCollection","features":[{"type":"Feature","properties":{"Name":"GMGI Solutions Ltd Map","timestamp":null,"descriptio":null,"begin":null,"end":null,"altitudeMo":null,"tessellate":-1,"extrude":0,"visibility":-1,"drawOrder":"NA","icon":null},"geometry":{"type":"Polygon","coordinates":[[[90.3661135,23.7532787],[90.366932,23.7538054],[90.3664155,23.755415],[90.3657638,23.7553241],[90.3658545,23.7548534],[90.3654512,23.7547709],[90.3648314,23.7542859],[90.3661135,23.7532787]]]}}]}
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {
+                "Name": "GMGI Solutions Ltd Map",
+                "timestamp": null,
+                "descriptio": null,
+                "begin": null,
+                "end": null,
+                "altitudeMo": null,
+                "tessellate": -1,
+                "extrude": 0,
+                "visibility": -1,
+                "drawOrder": "NA",
+                "icon": null
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            90.3661135,
+                            23.7532787
+                        ],
+                        [
+                            90.366932,
+                            23.7538054
+                        ],
+                        [
+                            90.3664155,
+                            23.755415
+                        ],
+                        [
+                            90.3657638,
+                            23.7553241
+                        ],
+                        [
+                            90.3658545,
+                            23.7548534
+                        ],
+                        [
+                            90.3654512,
+                            23.7547709
+                        ],
+                        [
+                            90.3648314,
+                            23.7542859
+                        ],
+                        [
+                            90.3661135,
+                            23.7532787
+                        ]
+                    ]
+                ]
+            }
+        }
+    ]
+}
