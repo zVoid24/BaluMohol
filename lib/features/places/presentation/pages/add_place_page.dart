@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -25,10 +27,38 @@ class AddPlacePage extends StatefulWidget {
   State<AddPlacePage> createState() => _AddPlacePageState();
 }
 
+class _AddressSuggestion {
+  const _AddressSuggestion({
+    required this.displayName,
+    required this.location,
+  });
+
+  final String displayName;
+  final LatLng location;
+
+  factory _AddressSuggestion.fromJson(Map<String, dynamic> json) {
+    double _parseCoordinate(dynamic value) {
+      if (value is num) {
+        return value.toDouble();
+      }
+      return double.parse(value as String);
+    }
+
+    return _AddressSuggestion(
+      displayName: json['display_name'] as String? ?? '',
+      location: LatLng(
+        _parseCoordinate(json['lat']),
+        _parseCoordinate(json['lon']),
+      ),
+    );
+  }
+}
+
 class _AddPlacePageState extends State<AddPlacePage> {
   final _formKey = GlobalKey<FormState>();
   final MapController _mapController = MapController();
   final ImagePicker _imagePicker = ImagePicker();
+  final FocusNode _addressFocusNode = FocusNode();
 
   late final TextEditingController _nameController;
   late final TextEditingController _categoryController;
@@ -42,6 +72,13 @@ class _AddPlacePageState extends State<AddPlacePage> {
   late LatLng _mapCenter;
   Uint8List? _selectedImageBytes;
   String? _selectedImageFileName;
+  Timer? _addressDebounce;
+  int _addressRequestId = 0;
+  bool _isFetchingAddressOptions = false;
+  bool _isHandlingAddressSelection = false;
+  List<_AddressSuggestion> _addressOptions = <_AddressSuggestion>[];
+  String? _addressLookupMessage;
+  bool _addressLookupIsError = false;
 
   @override
   void initState() {
@@ -66,7 +103,173 @@ class _AddPlacePageState extends State<AddPlacePage> {
     _phoneController.dispose();
     _websiteController.dispose();
     _descriptionController.dispose();
+    _addressDebounce?.cancel();
+    _addressFocusNode.dispose();
     super.dispose();
+  }
+
+  void _onAddressQueryChanged(String value) {
+    if (_isHandlingAddressSelection) {
+      return;
+    }
+
+    _addressDebounce?.cancel();
+    final trimmed = value.trim();
+
+    if (trimmed.length < 3) {
+      _addressRequestId++;
+      setState(() {
+        _addressOptions = <_AddressSuggestion>[];
+        _addressLookupMessage = null;
+        _addressLookupIsError = false;
+        _isFetchingAddressOptions = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _addressOptions = <_AddressSuggestion>[];
+      _addressLookupMessage = null;
+      _addressLookupIsError = false;
+    });
+
+    _addressDebounce = Timer(const Duration(milliseconds: 400), () {
+      _fetchAddressSuggestions(trimmed);
+    });
+  }
+
+  Future<void> _fetchAddressSuggestions(String query) async {
+    final requestId = ++_addressRequestId;
+
+    setState(() {
+      _isFetchingAddressOptions = true;
+      _addressLookupMessage = null;
+      _addressLookupIsError = false;
+    });
+
+    try {
+      final uri = Uri.https('nominatim.openstreetmap.org', '/search', {
+        'q': query,
+        'format': 'jsonv2',
+        'addressdetails': '1',
+        'limit': '5',
+      });
+      final response = await http.get(uri, headers: const {
+        'User-Agent': 'balumohol-app/1.0 (balumohol@example.com)',
+      });
+
+      if (!mounted || requestId != _addressRequestId) {
+        return;
+      }
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body) as List<dynamic>;
+        final suggestions = data
+            .whereType<Map<String, dynamic>>()
+            .map(_AddressSuggestion.fromJson)
+            .toList(growable: false);
+
+        setState(() {
+          _addressOptions = suggestions;
+          if (suggestions.isEmpty) {
+            _addressLookupMessage = 'No matching addresses found.';
+            _addressLookupIsError = false;
+          } else {
+            _addressLookupMessage = null;
+            _addressLookupIsError = false;
+          }
+        });
+      } else {
+        setState(() {
+          _addressOptions = <_AddressSuggestion>[];
+          _addressLookupMessage =
+              'Unable to load address suggestions. Please try again.';
+          _addressLookupIsError = true;
+        });
+      }
+    } catch (_) {
+      if (!mounted || requestId != _addressRequestId) {
+        return;
+      }
+      setState(() {
+        _addressOptions = <_AddressSuggestion>[];
+        _addressLookupMessage =
+            'Unable to load address suggestions. Please check your connection.';
+        _addressLookupIsError = true;
+      });
+    } finally {
+      if (!mounted || requestId != _addressRequestId) {
+        return;
+      }
+      setState(() {
+        _isFetchingAddressOptions = false;
+      });
+    }
+  }
+
+  void _handleAddressSuggestionSelected(_AddressSuggestion suggestion) {
+    _addressDebounce?.cancel();
+    _isHandlingAddressSelection = true;
+    _addressController.value = TextEditingValue(
+      text: suggestion.displayName,
+      selection: TextSelection.collapsed(
+        offset: suggestion.displayName.length,
+      ),
+    );
+    _isHandlingAddressSelection = false;
+
+    _addressRequestId++;
+
+    setState(() {
+      _addressOptions = <_AddressSuggestion>[];
+      _addressLookupMessage = null;
+      _addressLookupIsError = false;
+      _selectedLocation = suggestion.location;
+      _mapCenter = suggestion.location;
+      _isFetchingAddressOptions = false;
+    });
+
+    _mapController.move(
+      suggestion.location,
+      _mapController.camera.zoom,
+    );
+  }
+
+  InputDecoration _buildFieldDecoration({
+    required String label,
+    String? hint,
+    Widget? suffixIcon,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final borderRadius = BorderRadius.circular(12);
+    final baseBorder = OutlineInputBorder(
+      borderRadius: borderRadius,
+      borderSide: BorderSide(color: colorScheme.outlineVariant),
+    );
+
+    final fillColor = Color.alphaBlend(
+      colorScheme.surfaceVariant.withOpacity(
+        theme.brightness == Brightness.dark ? 0.24 : 0.1,
+      ),
+      colorScheme.surface,
+    );
+
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      filled: true,
+      fillColor: fillColor,
+      suffixIcon: suffixIcon,
+      border: baseBorder,
+      enabledBorder: baseBorder,
+      focusedBorder: baseBorder.copyWith(
+        borderSide: BorderSide(
+          color: colorScheme.primary,
+          width: 2,
+        ),
+      ),
+    );
   }
 
   void _selectLocation(LatLng point) {
@@ -364,9 +567,9 @@ class _AddPlacePageState extends State<AddPlacePage> {
                         const SizedBox(height: 12),
                         TextFormField(
                           controller: _nameController,
-                          decoration: const InputDecoration(
-                            labelText: 'Place name (required)',
-                            hintText: 'e.g. Rahman Traders',
+                          decoration: _buildFieldDecoration(
+                            label: 'Place name (required)',
+                            hint: 'e.g. Rahman Traders',
                           ),
                           textInputAction: TextInputAction.next,
                           validator: _validateRequired,
@@ -374,9 +577,9 @@ class _AddPlacePageState extends State<AddPlacePage> {
                         const SizedBox(height: 12),
                         TextFormField(
                           controller: _categoryController,
-                          decoration: InputDecoration(
-                            labelText: 'Category (required)',
-                            hintText: 'e.g. Grocery store',
+                          decoration: _buildFieldDecoration(
+                            label: 'Category (required)',
+                            hint: 'e.g. Grocery store',
                             suffixIcon: IconButton(
                               tooltip: 'Browse categories',
                               icon: const Icon(Icons.list_alt),
@@ -387,30 +590,128 @@ class _AddPlacePageState extends State<AddPlacePage> {
                           validator: _validateRequired,
                         ),
                         const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _addressController,
-                          decoration: const InputDecoration(
-                            labelText: 'Address (required)',
-                            hintText: 'Street, village, or house number',
-                          ),
-                          textInputAction: TextInputAction.next,
-                          validator: _validateRequired,
+                        LayoutBuilder(
+                          builder: (context, fieldConstraints) {
+                            return RawAutocomplete<_AddressSuggestion>(
+                              focusNode: _addressFocusNode,
+                              textEditingController: _addressController,
+                              displayStringForOption: (option) =>
+                                  option.displayName,
+                              optionsBuilder: (textEditingValue) {
+                                final trimmed =
+                                    textEditingValue.text.trim();
+                                if (trimmed.length < 3) {
+                                  return const Iterable<_AddressSuggestion>
+                                      .empty();
+                                }
+                                return _addressOptions;
+                              },
+                              onSelected: _handleAddressSuggestionSelected,
+                              fieldViewBuilder: (
+                                context,
+                                textEditingController,
+                                focusNode,
+                                onFieldSubmitted,
+                              ) {
+                                return TextFormField(
+                                  controller: textEditingController,
+                                  focusNode: focusNode,
+                                  decoration: _buildFieldDecoration(
+                                    label: 'Address (required)',
+                                    hint:
+                                        'Street, village, or house number',
+                                    suffixIcon: _isFetchingAddressOptions
+                                        ? const Padding(
+                                            padding: EdgeInsets.all(12),
+                                            child: SizedBox(
+                                              width: 16,
+                                              height: 16,
+                                              child:
+                                                  CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            ),
+                                          )
+                                        : const Icon(
+                                            Icons.place_outlined,
+                                          ),
+                                  ),
+                                  textInputAction: TextInputAction.next,
+                                  validator: _validateRequired,
+                                  onChanged: _onAddressQueryChanged,
+                                  onFieldSubmitted: (_) => onFieldSubmitted(),
+                                );
+                              },
+                              optionsViewBuilder:
+                                  (context, onSelected, options) {
+                                if (options.isEmpty) {
+                                  return const SizedBox.shrink();
+                                }
+
+                                return Align(
+                                  alignment: Alignment.topLeft,
+                                  child: Material(
+                                    elevation: 6,
+                                    borderRadius: BorderRadius.circular(12),
+                                    clipBehavior: Clip.antiAlias,
+                                    child: SizedBox(
+                                      width: fieldConstraints.maxWidth,
+                                      child: ConstrainedBox(
+                                        constraints: const BoxConstraints(
+                                          maxHeight: 240,
+                                        ),
+                                        child: ListView.separated(
+                                          padding: EdgeInsets.zero,
+                                          itemCount: options.length,
+                                          separatorBuilder: (_, __) =>
+                                              const Divider(height: 1),
+                                          itemBuilder: (context, index) {
+                                            final option =
+                                                options.elementAt(index);
+                                            return ListTile(
+                                              leading: const Icon(
+                                                Icons.place_outlined,
+                                              ),
+                                              title: Text(option.displayName),
+                                              onTap: () =>
+                                                  onSelected(option),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+                          },
                         ),
+                        if (_addressLookupMessage != null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            _addressLookupMessage!,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: _addressLookupIsError
+                                  ? theme.colorScheme.error
+                                  : theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 12),
                         TextFormField(
                           controller: _locatedWithinController,
-                          decoration: const InputDecoration(
-                            labelText: 'Located within (optional)',
-                            hintText: 'e.g. Market complex',
+                          decoration: _buildFieldDecoration(
+                            label: 'Located within (optional)',
+                            hint: 'e.g. Market complex',
                           ),
                           textInputAction: TextInputAction.next,
                         ),
                         const SizedBox(height: 12),
                         TextFormField(
                           controller: _phoneController,
-                          decoration: const InputDecoration(
-                            labelText: 'Phone (optional)',
-                            hintText: 'e.g. 017XXXXXXXX',
+                          decoration: _buildFieldDecoration(
+                            label: 'Phone (optional)',
+                            hint: 'e.g. 017XXXXXXXX',
                           ),
                           keyboardType: TextInputType.phone,
                           textInputAction: TextInputAction.next,
@@ -418,9 +719,9 @@ class _AddPlacePageState extends State<AddPlacePage> {
                         const SizedBox(height: 12),
                         TextFormField(
                           controller: _websiteController,
-                          decoration: const InputDecoration(
-                            labelText: 'Website (optional)',
-                            hintText: 'e.g. https://example.com',
+                          decoration: _buildFieldDecoration(
+                            label: 'Website (optional)',
+                            hint: 'e.g. https://example.com',
                           ),
                           keyboardType: TextInputType.url,
                           textInputAction: TextInputAction.next,
@@ -471,9 +772,9 @@ class _AddPlacePageState extends State<AddPlacePage> {
                         const SizedBox(height: 12),
                         TextFormField(
                           controller: _descriptionController,
-                          decoration: const InputDecoration(
-                            labelText: 'Additional details (optional)',
-                            hintText: 'Description, opening hours, notes',
+                          decoration: _buildFieldDecoration(
+                            label: 'Additional details (optional)',
+                            hint: 'Description, opening hours, notes',
                           ),
                           maxLines: 3,
                           textInputAction: TextInputAction.done,
