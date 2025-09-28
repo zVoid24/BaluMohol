@@ -30,6 +30,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
 
   bool _initialised = false;
   double _currentZoom = 15;
+  CustomPlace? _selectedCustomPlace;
 
   bool get _showCustomPlaceMarkers =>
       _currentZoom >= _customPlaceMarkerZoomThreshold;
@@ -248,6 +249,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
               place: place,
               onTap: () => _showCustomPlaceDetails(place),
               scale: scale,
+              isSelected: identical(place, _selectedCustomPlace),
             ),
           ),
         )
@@ -309,12 +311,21 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
   }
 
   Future<void> _showCustomPlaceDetails(CustomPlace place) async {
+    setState(() {
+      _selectedCustomPlace = place;
+    });
+
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
       builder: (context) => PlaceDetailsSheet(place: place),
     );
+
+    if (!mounted) return;
+    setState(() {
+      _selectedCustomPlace = null;
+    });
   }
 
   Future<void> _showPolygonDetails(
