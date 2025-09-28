@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +9,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:image_picker/image_picker.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,6 +23,74 @@ const String _historyStorageKey = 'locationHistory';
 const Duration _sampleRetentionDuration = Duration(seconds: 12);
 const double _defaultFollowZoom = 17;
 const String _customPlacesStorageKey = 'customPlaces';
+
+const List<String> _placeCategories = [
+  'Restaurant',
+  'Cafe',
+  'Coffee shop',
+  'Bakery',
+  'Fast food restaurant',
+  'Grocery store',
+  'Supermarket',
+  'Convenience store',
+  'Clothing store',
+  'Electronics store',
+  'Pharmacy',
+  'Hospital',
+  'Clinic',
+  'School',
+  'College',
+  'University',
+  'Library',
+  'Hotel',
+  'Guest house',
+  'ATM',
+  'Bank',
+  'Fuel station',
+  'Car repair',
+  'Parking',
+  'Park',
+  'Playground',
+  'Gym',
+  'Stadium',
+  'Movie theater',
+  'Shopping mall',
+  'Hardware store',
+  'Home goods store',
+  'Furniture store',
+  'Jewelry store',
+  'Salon',
+  'Spa',
+  'Barbershop',
+  'Mosque',
+  'Temple',
+  'Church',
+  'Government office',
+  'Police station',
+  'Post office',
+  'Courier service',
+  'Bus station',
+  'Train station',
+  'Airport',
+  'Tourist attraction',
+  'Museum',
+  'Zoo',
+  'Factory',
+  'Warehouse',
+  'Farm',
+  'Water treatment plant',
+  'Construction site',
+  'Community center',
+  'Event venue',
+  'Coworking space',
+  'Technology park',
+  'Religious institution',
+  'Sports club',
+  'Medical store',
+  'Diagnostic center',
+  'Pet store',
+  'Veterinary clinic',
+];
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -404,14 +474,12 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
           (polygon) {
             final bool isSelected = identical(polygon, _selectedPolygon);
             return Polygon(
-              key: ValueKey(polygon.id),
               points: polygon.outer,
               holePointsList: polygon.holes,
               color: isSelected ? selectedFillColor : baseFillColor,
               borderColor: isSelected ? selectedBorderColor : baseBorderColor,
               borderStrokeWidth: isSelected ? 3.6 : 2.8,
               isFilled: true,
-              onTap: (_, __) => _onPolygonTap(polygon),
             );
           },
         )
@@ -478,46 +546,55 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
 
     return _customPlaces
         .map(
-          (place) => Marker(
-            point: place.location,
-            width: 44,
-            height: 44,
-            alignment: Alignment.topCenter,
-            child: GestureDetector(
-              onTap: () => _showCustomPlaceDetails(place),
-              child: Tooltip(
-                message:
-                    '${place.name.isEmpty ? 'অজ্ঞাত স্থান' : place.name}\nশ্রেণী: ${place.category}\nঠিকানা: ${place.address}',
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.deepPurple,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        place.name.isEmpty ? 'অজ্ঞাত স্থান' : place.name,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
+          (place) {
+            final imageBytes = place.imageBytes;
+            return Marker(
+              point: place.location,
+              width: 48,
+              height: 72,
+              alignment: Alignment.topCenter,
+              child: GestureDetector(
+                onTap: () => _showCustomPlaceDetails(place),
+                child: Tooltip(
+                  message:
+                      '${place.name.isEmpty ? 'Unnamed place' : place.name}\nCategory: ${place.category}\nAddress: ${place.address}',
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (place.name.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.75),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            place.name,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    const Icon(
-                      Icons.location_on,
-                      color: Colors.deepPurple,
-                      size: 32,
-                    ),
-                  ],
+                      if (imageBytes != null) ...[
+                        const SizedBox(height: 4),
+                        CircleAvatar(
+                          radius: 14,
+                          backgroundImage: MemoryImage(imageBytes),
+                        ),
+                      ],
+                      const SizedBox(height: 4),
+                      const _GoogleStyleMarker(),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         )
         .toList();
   }
@@ -546,11 +623,20 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     );
   }
 
+  _PolygonFeature? _polygonAt(LatLng point) {
+    for (final polygon in _polygons) {
+      if (_isPointInsidePolygon(point, polygon)) {
+        return polygon;
+      }
+    }
+    return null;
+  }
+
   void _onPolygonTap(_PolygonFeature polygon) {
     if (!mounted) return;
     setState(() {
       _selectedPolygon = polygon;
-      _skipNextMapTapClear = true;
+      _skipNextMapTapClear = false;
     });
   }
 
@@ -680,10 +766,10 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     await _persistCustomPlaces();
 
     if (!mounted) return;
-    final displayName = result.name.isEmpty ? 'নতুন স্থান' : result.name;
+    final displayName = result.name.isEmpty ? 'New place' : result.name;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('📍 "${_toBanglaDigits(displayName)}" মানচিত্রে যুক্ত হয়েছে।'),
+        content: Text('📍 "$displayName" added to the map.'),
       ),
     );
   }
@@ -718,7 +804,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
             FloatingActionButton.extended(
               heroTag: 'add_place_btn',
               onPressed: _startAddPlaceFlow,
-              label: const Text('নতুন স্থান যোগ করুন'),
+              label: const Text('Add place'),
               icon: const Icon(Icons.add_location_alt),
             ),
           ],
@@ -734,6 +820,11 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
               onTap: (tapPosition, point) {
                 if (_skipNextMapTapClear) {
                   _skipNextMapTapClear = false;
+                  return;
+                }
+                final polygon = _polygonAt(point);
+                if (polygon != null) {
+                  _onPolygonTap(polygon);
                   return;
                 }
                 if (_selectedPolygon != null) {
@@ -848,6 +939,46 @@ class _CurrentLocationIndicator extends StatelessWidget {
   }
 }
 
+class _GoogleStyleMarker extends StatelessWidget {
+  const _GoogleStyleMarker({
+    this.color = const Color(0xFFE53935),
+  });
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 40,
+      width: 30,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Icon(
+            Icons.location_pin,
+            color: color,
+            size: 40,
+          ),
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.25),
+                  blurRadius: 4,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SelectedPolygonCard extends StatelessWidget {
   const _SelectedPolygonCard({
     required this.polygon,
@@ -944,6 +1075,7 @@ class _PlaceDetailsSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final entries = place.details();
+    final imageBytes = place.imageBytes;
 
     return SafeArea(
       child: Padding(
@@ -961,19 +1093,31 @@ class _PlaceDetailsSheet extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    place.name.isEmpty ? 'নতুন স্থান' : place.name,
+                    place.name.isEmpty ? 'New place' : place.name,
                     style: theme.textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
                 IconButton(
-                  tooltip: 'বন্ধ করুন',
+                  tooltip: 'Close',
                   onPressed: () => Navigator.of(context).pop(),
                   icon: const Icon(Icons.close),
                 ),
               ],
             ),
+            if (imageBytes != null) ...[
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Image.memory(
+                  imageBytes,
+                  height: 200,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ],
             if (place.category.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
@@ -1033,6 +1177,7 @@ class _AddPlacePage extends StatefulWidget {
 class _AddPlacePageState extends State<_AddPlacePage> {
   final _formKey = GlobalKey<FormState>();
   final MapController _mapController = MapController();
+  final ImagePicker _imagePicker = ImagePicker();
 
   late final TextEditingController _nameController;
   late final TextEditingController _categoryController;
@@ -1044,6 +1189,8 @@ class _AddPlacePageState extends State<_AddPlacePage> {
 
   LatLng? _selectedLocation;
   late LatLng _mapCenter;
+  Uint8List? _selectedImageBytes;
+  String? _selectedImageFileName;
 
   @override
   void initState() {
@@ -1081,9 +1228,161 @@ class _AddPlacePageState extends State<_AddPlacePage> {
     _selectLocation(_mapCenter);
   }
 
+  Future<void> _showCategoryPicker() async {
+    final selectedCategory = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) {
+        String searchQuery = '';
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom,
+            ),
+            child: SizedBox(
+              height: MediaQuery.of(context).size.height * 0.6,
+              child: StatefulBuilder(
+                builder: (context, setModalState) {
+                  final matches = _placeCategories
+                      .where(
+                        (category) => category
+                            .toLowerCase()
+                            .contains(searchQuery.toLowerCase()),
+                      )
+                      .toList();
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(20, 16, 20, 4),
+                        child: Text(
+                          'Select a category',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 8,
+                        ),
+                        child: TextField(
+                          autofocus: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Search categories',
+                            prefixIcon: Icon(Icons.search),
+                          ),
+                          onChanged: (value) {
+                            setModalState(() {
+                              searchQuery = value;
+                            });
+                          },
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      if (matches.isEmpty)
+                        const Expanded(
+                          child: Center(
+                            child: Text('No categories found.'),
+                          ),
+                        )
+                      else
+                        Expanded(
+                          child: ListView.separated(
+                            itemCount: matches.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final category = matches[index];
+                              return ListTile(
+                                title: Text(category),
+                                onTap: () => Navigator.of(context).pop(category),
+                              );
+                            },
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    if (selectedCategory != null) {
+      setState(() {
+        _categoryController.text = selectedCategory;
+      });
+    }
+  }
+
+  Future<void> _pickImage() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_camera),
+                title: const Text('Take a photo'),
+                onTap: () => Navigator.of(context).pop(ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Choose from gallery'),
+                onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (source == null) {
+      return;
+    }
+
+    try {
+      final picked = await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 1600,
+        imageQuality: 85,
+      );
+      if (picked == null) {
+        return;
+      }
+      final bytes = await picked.readAsBytes();
+      if (!mounted) return;
+      setState(() {
+        _selectedImageBytes = bytes;
+        _selectedImageFileName = picked.name;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to select an image: $error')),
+      );
+    }
+  }
+
+  void _removeImage() {
+    setState(() {
+      _selectedImageBytes = null;
+      _selectedImageFileName = null;
+    });
+  }
+
   String? _validateRequired(String? value) {
     if (value == null || value.trim().isEmpty) {
-      return 'এই তথ্য প্রয়োজন।';
+      return 'This field is required.';
     }
     return null;
   }
@@ -1101,7 +1400,7 @@ class _AddPlacePageState extends State<_AddPlacePage> {
     final location = _selectedLocation;
     if (location == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('দয়া করে মানচিত্রে একটি স্থান নির্বাচন করুন।')),
+        const SnackBar(content: Text('Please select a point on the map.')),
       );
       return;
     }
@@ -1116,6 +1415,8 @@ class _AddPlacePageState extends State<_AddPlacePage> {
       website: _optionalText(_websiteController),
       description: _optionalText(_descriptionController),
       createdAt: DateTime.now(),
+      imageBase64:
+          _selectedImageBytes != null ? base64Encode(_selectedImageBytes!) : null,
     );
 
     Navigator.of(context).pop(place);
@@ -1127,17 +1428,17 @@ class _AddPlacePageState extends State<_AddPlacePage> {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final location = _selectedLocation;
     final locationSummary = location != null
-        ? 'নির্বাচিত স্থান: ${_formatLatLng(location)}'
-        : 'মানচিত্রে ট্যাপ করে অবস্থান নির্বাচন করুন।';
+        ? 'Selected point: ${location.latitude.toStringAsFixed(6)}, ${location.longitude.toStringAsFixed(6)}'
+        : 'Tap the map to choose a location.';
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('নতুন স্থান যোগ করুন'),
+        title: const Text('Add a new place'),
         leading: const CloseButton(),
         actions: [
           TextButton(
             onPressed: _submit,
-            child: const Text('সংরক্ষণ'),
+            child: const Text('Save'),
           ),
         ],
       ),
@@ -1152,7 +1453,7 @@ class _AddPlacePageState extends State<_AddPlacePage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'মানচিত্রে অবস্থান নির্বাচন করুন',
+                    'Pick a location on the map',
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
@@ -1186,11 +1487,7 @@ class _AddPlacePageState extends State<_AddPlacePage> {
                                   point: location,
                                   width: 40,
                                   height: 40,
-                                  child: const Icon(
-                                    Icons.location_on,
-                                    color: Colors.red,
-                                    size: 40,
-                                  ),
+                                  child: const _GoogleStyleMarker(),
                                 ),
                               ],
                             ),
@@ -1210,13 +1507,13 @@ class _AddPlacePageState extends State<_AddPlacePage> {
                       TextButton.icon(
                         onPressed: _useMapCenter,
                         icon: const Icon(Icons.center_focus_strong),
-                        label: const Text('কেন্দ্র নির্বাচন'),
+                        label: const Text('Use map center'),
                       ),
                     ],
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    'স্থান সম্পর্কে তথ্য দিন',
+                    'Place information',
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
@@ -1225,8 +1522,8 @@ class _AddPlacePageState extends State<_AddPlacePage> {
                   TextFormField(
                     controller: _nameController,
                     decoration: const InputDecoration(
-                      labelText: 'স্থান নাম (আবশ্যিক)',
-                      hintText: 'উদাহরণ: রহমান ট্রেডার্স',
+                      labelText: 'Place name (required)',
+                      hintText: 'e.g. Rahman Traders',
                     ),
                     textInputAction: TextInputAction.next,
                     validator: _validateRequired,
@@ -1234,9 +1531,14 @@ class _AddPlacePageState extends State<_AddPlacePage> {
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _categoryController,
-                    decoration: const InputDecoration(
-                      labelText: 'বিভাগ (আবশ্যিক)',
-                      hintText: 'উদাহরণ: মুদি দোকান',
+                    decoration: InputDecoration(
+                      labelText: 'Category (required)',
+                      hintText: 'e.g. Grocery store',
+                      suffixIcon: IconButton(
+                        tooltip: 'Browse categories',
+                        icon: const Icon(Icons.list_alt),
+                        onPressed: _showCategoryPicker,
+                      ),
                     ),
                     textInputAction: TextInputAction.next,
                     validator: _validateRequired,
@@ -1245,8 +1547,8 @@ class _AddPlacePageState extends State<_AddPlacePage> {
                   TextFormField(
                     controller: _addressController,
                     decoration: const InputDecoration(
-                      labelText: 'ঠিকানা (আবশ্যিক)',
-                      hintText: 'রাস্তা, গ্রাম বা বাড়ি নম্বর',
+                      labelText: 'Address (required)',
+                      hintText: 'Street, village, or house number',
                     ),
                     textInputAction: TextInputAction.next,
                     validator: _validateRequired,
@@ -1255,8 +1557,8 @@ class _AddPlacePageState extends State<_AddPlacePage> {
                   TextFormField(
                     controller: _locatedWithinController,
                     decoration: const InputDecoration(
-                      labelText: 'কোন স্থানের ভিতরে (ঐচ্ছিক)',
-                      hintText: 'উদাহরণ: বাজার কমপ্লেক্স',
+                      labelText: 'Located within (optional)',
+                      hintText: 'e.g. Market complex',
                     ),
                     textInputAction: TextInputAction.next,
                   ),
@@ -1264,8 +1566,8 @@ class _AddPlacePageState extends State<_AddPlacePage> {
                   TextFormField(
                     controller: _phoneController,
                     decoration: const InputDecoration(
-                      labelText: 'ফোন (ঐচ্ছিক)',
-                      hintText: 'উদাহরণ: ০১৭XXXXXXXX',
+                      labelText: 'Phone (optional)',
+                      hintText: 'e.g. 017XXXXXXXX',
                     ),
                     keyboardType: TextInputType.phone,
                     textInputAction: TextInputAction.next,
@@ -1274,18 +1576,61 @@ class _AddPlacePageState extends State<_AddPlacePage> {
                   TextFormField(
                     controller: _websiteController,
                     decoration: const InputDecoration(
-                      labelText: 'ওয়েবসাইট (ঐচ্ছিক)',
-                      hintText: 'উদাহরণ: https://example.com',
+                      labelText: 'Website (optional)',
+                      hintText: 'e.g. https://example.com',
                     ),
                     keyboardType: TextInputType.url,
                     textInputAction: TextInputAction.next,
                   ),
                   const SizedBox(height: 12),
+                  Text(
+                    'Photos (optional)',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: _pickImage,
+                        icon: const Icon(Icons.add_a_photo),
+                        label: const Text('Add photo'),
+                      ),
+                      if (_selectedImageFileName != null)
+                        TextButton.icon(
+                          onPressed: _removeImage,
+                          icon: const Icon(Icons.delete_outline),
+                          label: const Text('Remove photo'),
+                        ),
+                      if (_selectedImageFileName != null)
+                        Text(
+                          _selectedImageFileName!,
+                          style: theme.textTheme.bodySmall,
+                        ),
+                    ],
+                  ),
+                  if (_selectedImageBytes != null) ...[
+                    const SizedBox(height: 12),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.memory(
+                        _selectedImageBytes!,
+                        height: 150,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   TextFormField(
                     controller: _descriptionController,
                     decoration: const InputDecoration(
-                      labelText: 'অতিরিক্ত তথ্য (ঐচ্ছিক)',
-                      hintText: 'পরিচিতি, সময়সূচি বা অন্যান্য তথ্য',
+                      labelText: 'Additional details (optional)',
+                      hintText: 'Description, opening hours, notes',
                     ),
                     maxLines: 3,
                     textInputAction: TextInputAction.done,
@@ -1296,7 +1641,7 @@ class _AddPlacePageState extends State<_AddPlacePage> {
                     child: FilledButton.icon(
                       onPressed: _submit,
                       icon: const Icon(Icons.check_circle),
-                      label: const Text('স্থান সংরক্ষণ করুন'),
+                      label: const Text('Save place'),
                     ),
                   ),
                 ],
@@ -1348,6 +1693,7 @@ class _CustomPlace {
     this.website,
     this.description,
     required this.createdAt,
+    this.imageBase64,
   });
 
   factory _CustomPlace.fromJson(Map<String, dynamic> json) {
@@ -1367,6 +1713,7 @@ class _CustomPlace {
       createdAt: createdAtMs != null
           ? DateTime.fromMillisecondsSinceEpoch(createdAtMs)
           : DateTime.now(),
+      imageBase64: (json['image'] as String?).emptyToNull(),
     );
   }
 
@@ -1382,6 +1729,7 @@ class _CustomPlace {
       'website': website,
       'description': description,
       'createdAt': createdAt.millisecondsSinceEpoch,
+      'image': imageBase64,
     };
   }
 
@@ -1394,27 +1742,47 @@ class _CustomPlace {
   final String? website;
   final String? description;
   final DateTime createdAt;
+  final String? imageBase64;
+
+  Uint8List? get imageBytes {
+    final data = imageBase64;
+    if (data == null || data.isEmpty) {
+      return null;
+    }
+    try {
+      return base64Decode(data);
+    } catch (_) {
+      return null;
+    }
+  }
 
   List<MapEntry<String, String>> details() {
     final entries = <MapEntry<String, String>>[
-      MapEntry('বিভাগ', _toBanglaDigits(category)),
-      MapEntry('ঠিকানা', _toBanglaDigits(address)),
+      MapEntry('Category', category),
+      MapEntry('Address', address),
     ];
 
     if (locatedWithin != null && locatedWithin!.isNotEmpty) {
-      entries.add(MapEntry('অবস্থান', _toBanglaDigits(locatedWithin!)));
+      entries.add(MapEntry('Located within', locatedWithin!));
     }
     if (phone != null && phone!.isNotEmpty) {
-      entries.add(MapEntry('ফোন', _toBanglaDigits(phone!)));
+      entries.add(MapEntry('Phone', phone!));
     }
     if (website != null && website!.isNotEmpty) {
-      entries.add(MapEntry('ওয়েবসাইট', website!));
+      entries.add(MapEntry('Website', website!));
     }
     if (description != null && description!.isNotEmpty) {
-      entries.add(MapEntry('বিস্তারিত', _toBanglaDigits(description!)));
+      entries.add(MapEntry('Details', description!));
     }
-    entries.add(MapEntry('সময়', _formatTimestamp(createdAt.millisecondsSinceEpoch)));
-    entries.add(MapEntry('সমন্বয়', _formatLatLng(location)));
+    entries.add(
+      MapEntry('Added on', _formatTimestampEnglish(createdAt.millisecondsSinceEpoch)),
+    );
+    entries.add(
+      MapEntry(
+        'Coordinates',
+        '${location.latitude.toStringAsFixed(6)}, ${location.longitude.toStringAsFixed(6)}',
+      ),
+    );
     return entries;
   }
 }
@@ -1521,6 +1889,17 @@ String _formatTimestamp(int timestampMs) {
   final minute = dt.minute.toString().padLeft(2, '0');
   final second = dt.second.toString().padLeft(2, '0');
   return _toBanglaDigits('$year-$month-$day $hour:$minute:$second');
+}
+
+String _formatTimestampEnglish(int timestampMs) {
+  final dt = DateTime.fromMillisecondsSinceEpoch(timestampMs).toLocal();
+  final year = dt.year.toString().padLeft(4, '0');
+  final month = dt.month.toString().padLeft(2, '0');
+  final day = dt.day.toString().padLeft(2, '0');
+  final hour = dt.hour.toString().padLeft(2, '0');
+  final minute = dt.minute.toString().padLeft(2, '0');
+  final second = dt.second.toString().padLeft(2, '0');
+  return '$year-$month-$day $hour:$minute:$second';
 }
 
 List<MapEntry<String, String>> _polygonReadableProperties(
