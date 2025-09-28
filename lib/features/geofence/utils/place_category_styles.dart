@@ -72,6 +72,19 @@ PlaceCategoryStyle styleForCategory(String category) {
   }
 
   if (_containsAny(normalized, const [
+    'gym',
+    'fitness',
+    'workout',
+    'training',
+    'yoga',
+  ])) {
+    return PlaceCategoryStyle(
+      icon: Icons.fitness_center,
+      color: Colors.deepPurple.shade400,
+    );
+  }
+
+  if (_containsAny(normalized, const [
     'hotel',
     'guest house',
     'resort',
@@ -115,7 +128,6 @@ PlaceCategoryStyle styleForCategory(String category) {
     'park',
     'playground',
     'stadium',
-    'gym',
     'sports',
     'zoo',
     'tourist',
