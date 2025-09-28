@@ -236,8 +236,8 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
           (place) => Marker(
             point: place.location,
             width: 160,
-            height: 140,
-            alignment: Alignment.topCenter,
+            height: 120,
+            alignment: Alignment.bottomCenter,
             child: CustomPlaceMarker(
               place: place,
               onTap: () => _showCustomPlaceDetails(place),
