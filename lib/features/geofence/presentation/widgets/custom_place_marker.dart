@@ -23,6 +23,63 @@ class CustomPlaceMarker extends StatelessWidget {
     final markerLabel = place.name.isNotEmpty ? place.name : place.category;
     const markerColor = Color(0xFF1976D2);
     const selectedColor = Color(0xFFE53935);
+    final bool hasLabel = markerLabel.isNotEmpty;
+    final IconData iconData = isSelected ? Icons.location_on : style.icon;
+    final Color iconColor = isSelected ? selectedColor : markerColor;
+    final TextStyle labelStyle = TextStyle(
+      color: iconColor,
+      fontSize: 12,
+      fontWeight: FontWeight.w600,
+    );
+
+    Widget buildLabelContent() {
+      if (!hasLabel) {
+        return Icon(
+          iconData,
+          color: iconColor,
+          size: isSelected ? 24 : 20,
+        );
+      }
+
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        constraints: const BoxConstraints(maxWidth: 160),
+        decoration: isSelected
+            ? BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              )
+            : null,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(
+              iconData,
+              size: 18,
+              color: iconColor,
+            ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                markerLabel,
+                style: labelStyle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return GestureDetector(
       onTap: onTap,
       child: Tooltip(
@@ -34,76 +91,7 @@ class CustomPlaceMarker extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (isSelected) ...[
-                const Icon(
-                  Icons.location_on,
-                  color: selectedColor,
-                  size: 48,
-                ),
-                if (markerLabel.isNotEmpty)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    constraints: const BoxConstraints(maxWidth: 160),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Colors.black26,
-                          blurRadius: 4,
-                          offset: Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Text(
-                      markerLabel,
-                      style: const TextStyle(
-                        color: selectedColor,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-              ] else if (markerLabel.isNotEmpty)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  constraints: const BoxConstraints(maxWidth: 160),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        style.icon,
-                        size: 18,
-                        color: markerColor,
-                      ),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          markerLabel,
-                          style: TextStyle(
-                            color: markerColor,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else
-                Icon(
-                  style.icon,
-                  color: markerColor,
-                  size: 20,
-                ),
+              buildLabelContent(),
             ],
           ),
         ),
