@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:balumohol/features/geofence/models/custom_place.dart';
+import 'package:balumohol/features/geofence/utils/place_category_styles.dart';
 
 class PlaceDetailsSheet extends StatelessWidget {
   const PlaceDetailsSheet({
@@ -15,6 +16,8 @@ class PlaceDetailsSheet extends StatelessWidget {
     final theme = Theme.of(context);
     final entries = place.details();
     final imageBytes = place.imageBytes;
+    final style = styleForCategory(place.category);
+    final placeName = place.name.isEmpty ? 'New place' : place.name;
 
     return DraggableScrollableSheet(
       expand: false,
@@ -36,11 +39,26 @@ class PlaceDetailsSheet extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(
-                      child: Text(
-                        place.name.isEmpty ? 'New place' : place.name,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.location_on,
+                            color: style.color,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              placeName,
+                              style: theme.textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: style.color,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     IconButton(

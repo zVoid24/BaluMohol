@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import 'package:balumohol/features/geofence/models/custom_place.dart';
-import 'package:balumohol/features/geofence/presentation/widgets/google_style_marker.dart';
 import 'package:balumohol/features/geofence/utils/place_category_styles.dart';
 
 class CustomPlaceMarker extends StatelessWidget {
@@ -67,7 +66,6 @@ class CustomPlaceMarker extends StatelessWidget {
                   ],
                 ),
               ),
-            GoogleStyleMarker(color: style.color),
           ],
         ),
       ),
