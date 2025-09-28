@@ -25,6 +25,8 @@ class GeofenceMapPage extends StatefulWidget {
 
 class _GeofenceMapPageState extends State<GeofenceMapPage> {
   static const double _customPlaceMarkerZoomThreshold = 14;
+  static const double _customPlaceMarkerBaseWidth = 160;
+  static const double _customPlaceMarkerBaseHeight = 64;
 
   bool _initialised = false;
   double _currentZoom = 15;
@@ -231,20 +233,42 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
       return const [];
     }
 
+    final scale = _markerScaleForZoom(_currentZoom);
+    final markerWidth = _customPlaceMarkerBaseWidth * scale;
+    final markerHeight = _customPlaceMarkerBaseHeight * scale;
+
     return controller.customPlaces
         .map(
           (place) => Marker(
             point: place.location,
-            width: 160,
-            height: 120,
+            width: markerWidth,
+            height: markerHeight,
             alignment: Alignment.bottomCenter,
             child: CustomPlaceMarker(
               place: place,
               onTap: () => _showCustomPlaceDetails(place),
+              scale: scale,
             ),
           ),
         )
         .toList();
+  }
+
+  double _markerScaleForZoom(double zoom) {
+    const double minZoom = _customPlaceMarkerZoomThreshold;
+    const double maxZoom = 18;
+    const double minScale = 0.6;
+    const double maxScale = 1.0;
+
+    if (zoom <= minZoom) {
+      return minScale;
+    }
+    if (zoom >= maxZoom) {
+      return maxScale;
+    }
+
+    final interpolationFactor = (zoom - minZoom) / (maxZoom - minZoom);
+    return minScale + (maxScale - minScale) * interpolationFactor;
   }
 
   Future<void> _goToCurrentLocation(GeofenceMapController controller) async {
