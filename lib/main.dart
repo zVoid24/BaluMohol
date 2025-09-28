@@ -20,6 +20,7 @@ const int _maxHistoryEntries = 200;
 const String _historyStorageKey = 'locationHistory';
 const Duration _sampleRetentionDuration = Duration(seconds: 12);
 const double _defaultFollowZoom = 17;
+const String _customPlacesStorageKey = 'customPlaces';
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -49,6 +50,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
   final List<_PolygonFeature> _polygons = [];
   final List<_PositionSample> _samples = [];
   final List<LocationHistoryEntry> _history = [];
+  final List<_CustomPlace> _customPlaces = [];
 
   LatLng? _currentLocation;
   double? _currentAccuracy;
@@ -63,10 +65,12 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
   bool _mapReady = false;
   bool _permissionDenied = false;
   bool _hasCenteredOnUser = false;
+  bool _skipNextMapTapClear = false;
 
   LatLng _fallbackCenter = const LatLng(23.8103, 90.4125);
   LatLng? _pendingCenter;
   double? _pendingZoom;
+  _PolygonFeature? _selectedPolygon;
 
   @override
   void initState() {
@@ -78,6 +82,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     _prefs = await SharedPreferences.getInstance();
     await _loadGeoJsonBoundary();
     await _loadHistory();
+    await _loadCustomPlaces();
     await _startLocationTracking();
     _historyTimer = Timer.periodic(
       _historyInterval,
@@ -104,6 +109,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
         _polygons
           ..clear()
           ..addAll(polygons);
+        _selectedPolygon = null;
         if (center != null) {
           _fallbackCenter = center;
         }
@@ -141,10 +147,38 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     }
   }
 
+  Future<void> _loadCustomPlaces() async {
+    if (_prefs == null) return;
+    final stored = _prefs!.getString(_customPlacesStorageKey);
+    if (stored == null) return;
+    try {
+      final decoded = json.decode(stored) as List<dynamic>;
+      final places = decoded
+          .whereType<Map<String, dynamic>>()
+          .map(_CustomPlace.fromJson)
+          .toList();
+      if (!mounted) return;
+      setState(() {
+        _customPlaces
+          ..clear()
+          ..addAll(places);
+      });
+    } catch (_) {
+      // ignore malformed stored data
+    }
+  }
+
   Future<void> _persistHistory() async {
     if (_prefs == null) return;
     final encoded = json.encode(_history.map((e) => e.toJson()).toList());
     await _prefs!.setString(_historyStorageKey, encoded);
+  }
+
+  Future<void> _persistCustomPlaces() async {
+    if (_prefs == null) return;
+    final encoded =
+        json.encode(_customPlaces.map((place) => place.toJson()).toList());
+    await _prefs!.setString(_customPlacesStorageKey, encoded);
   }
 
   Future<void> _recordHistoryEntry() async {
@@ -359,20 +393,27 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
   }
 
   List<Polygon> _buildPolygons() {
-    final Color borderColor = Colors.blue.shade600;
-    final Color fillColor = const Color(0xFF42A5F5).withOpacity(0.2);
+    final Color baseBorderColor = Colors.blue.shade600;
+    final Color selectedBorderColor = Colors.orange.shade700;
+    final Color baseFillColor = const Color(0xFF42A5F5).withOpacity(0.2);
+    final Color selectedFillColor = const Color(0xFFFFB74D).withOpacity(0.35);
 
     return _polygons
         .where((polygon) => polygon.outer.isNotEmpty)
         .map(
-          (polygon) => Polygon(
-            points: polygon.outer,
-            holePointsList: polygon.holes,
-            color: fillColor,
-            borderColor: borderColor,
-            borderStrokeWidth: 2.8,
-            isFilled: true,
-          ),
+          (polygon) {
+            final bool isSelected = identical(polygon, _selectedPolygon);
+            return Polygon(
+              key: ValueKey(polygon.id),
+              points: polygon.outer,
+              holePointsList: polygon.holes,
+              color: isSelected ? selectedFillColor : baseFillColor,
+              borderColor: isSelected ? selectedBorderColor : baseBorderColor,
+              borderStrokeWidth: isSelected ? 3.6 : 2.8,
+              isFilled: true,
+              onTap: (_, __) => _onPolygonTap(polygon),
+            );
+          },
         )
         .toList();
   }
@@ -430,6 +471,57 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
         .toList();
   }
 
+  List<Marker> _buildCustomPlaceMarkers() {
+    if (_customPlaces.isEmpty) {
+      return const [];
+    }
+
+    return _customPlaces
+        .map(
+          (place) => Marker(
+            point: place.location,
+            width: 44,
+            height: 44,
+            alignment: Alignment.topCenter,
+            child: GestureDetector(
+              onTap: () => _showCustomPlaceDetails(place),
+              child: Tooltip(
+                message:
+                    '${place.name.isEmpty ? 'অজ্ঞাত স্থান' : place.name}\nশ্রেণী: ${place.category}\nঠিকানা: ${place.address}',
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.deepPurple,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        place.name.isEmpty ? 'অজ্ঞাত স্থান' : place.name,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Icon(
+                      Icons.location_on,
+                      color: Colors.deepPurple,
+                      size: 32,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        )
+        .toList();
+  }
+
   void _onCurrentLocationMarkerTap() {
     final location = _currentLocation;
     if (location == null) {
@@ -451,6 +543,25 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
         const SizedBox(height: 8),
         Text(_statusMessage),
       ],
+    );
+  }
+
+  void _onPolygonTap(_PolygonFeature polygon) {
+    if (!mounted) return;
+    setState(() {
+      _selectedPolygon = polygon;
+      _skipNextMapTapClear = true;
+    });
+  }
+
+  void _showCustomPlaceDetails(_CustomPlace place) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (context) => _PlaceDetailsSheet(place: place),
     );
   }
 
@@ -546,10 +657,42 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     );
   }
 
+  Future<void> _startAddPlaceFlow() async {
+    final result = await Navigator.of(context).push<_CustomPlace>(
+      MaterialPageRoute(
+        builder: (context) => _AddPlacePage(
+          initialLocation: _currentLocation ?? _fallbackCenter,
+        ),
+      ),
+    );
+
+    if (result == null) {
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _customPlaces.add(result);
+    });
+    await _persistCustomPlaces();
+
+    if (!mounted) return;
+    final displayName = result.name.isEmpty ? 'নতুন স্থান' : result.name;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('📍 "${_toBanglaDigits(displayName)}" মানচিত্রে যুক্ত হয়েছে।'),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentMarker = _buildCurrentLocationMarker();
     final historyMarkers = _buildHistoryMarkers();
+    final customPlaceMarkers = _buildCustomPlaceMarkers();
 
     return Scaffold(
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
@@ -571,6 +714,13 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
               label: const Text('এখন ক্যালিব্রেট করুন'),
               icon: const Icon(Icons.compass_calibration),
             ),
+            const SizedBox(height: 12),
+            FloatingActionButton.extended(
+              heroTag: 'add_place_btn',
+              onPressed: _startAddPlaceFlow,
+              label: const Text('নতুন স্থান যোগ করুন'),
+              icon: const Icon(Icons.add_location_alt),
+            ),
           ],
         ),
       ),
@@ -581,6 +731,17 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
             options: MapOptions(
               initialCenter: _fallbackCenter,
               initialZoom: 15,
+              onTap: (tapPosition, point) {
+                if (_skipNextMapTapClear) {
+                  _skipNextMapTapClear = false;
+                  return;
+                }
+                if (_selectedPolygon != null) {
+                  setState(() {
+                    _selectedPolygon = null;
+                  });
+                }
+              },
               onMapReady: () {
                 _mapReady = true;
                 if (_pendingCenter != null) {
@@ -601,6 +762,8 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
                 PolygonLayer(polygons: _buildPolygons()),
               if (historyMarkers.isNotEmpty)
                 MarkerLayer(markers: historyMarkers),
+              if (customPlaceMarkers.isNotEmpty)
+                MarkerLayer(markers: customPlaceMarkers),
               if (currentMarker != null) MarkerLayer(markers: [currentMarker]),
             ],
           ),
@@ -613,6 +776,26 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
               ),
             ),
           ),
+          if (_selectedPolygon != null)
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 12,
+                  right: 12,
+                  bottom: 12 + MediaQuery.of(context).padding.bottom,
+                ),
+                child: _SelectedPolygonCard(
+                  polygon: _selectedPolygon!,
+                  onClose: () {
+                    setState(() {
+                      _selectedPolygon = null;
+                      _skipNextMapTapClear = false;
+                    });
+                  },
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -665,6 +848,467 @@ class _CurrentLocationIndicator extends StatelessWidget {
   }
 }
 
+class _SelectedPolygonCard extends StatelessWidget {
+  const _SelectedPolygonCard({
+    required this.polygon,
+    required this.onClose,
+  });
+
+  final _PolygonFeature polygon;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final entries = _polygonReadableProperties(polygon);
+
+    final String titleValue;
+    final plotNumber = polygon.properties['plot_number'];
+    if (plotNumber != null) {
+      titleValue = 'প্লট ${_formatPropertyValue(plotNumber)}';
+    } else {
+      titleValue = 'প্লটের বিবরণ';
+    }
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 420),
+      child: Material(
+        elevation: 6,
+        borderRadius: BorderRadius.circular(16),
+        color: theme.colorScheme.surface,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      titleValue,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: onClose,
+                    tooltip: 'বন্ধ করুন',
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              if (entries.isNotEmpty) const Divider(height: 20),
+              ...entries.map(
+                (entry) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        flex: 4,
+                        child: Text(
+                          entry.key,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 7,
+                        child: Text(
+                          entry.value,
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlaceDetailsSheet extends StatelessWidget {
+  const _PlaceDetailsSheet({required this.place});
+
+  final _CustomPlace place;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final entries = place.details();
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 16,
+          bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    place.name.isEmpty ? 'নতুন স্থান' : place.name,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'বন্ধ করুন',
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+            if (place.category.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  place.category,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ...entries.map(
+              (entry) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 110,
+                      child: Text(
+                        entry.key,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        entry.value,
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AddPlacePage extends StatefulWidget {
+  const _AddPlacePage({
+    super.key,
+    required this.initialLocation,
+  });
+
+  final LatLng initialLocation;
+
+  @override
+  State<_AddPlacePage> createState() => _AddPlacePageState();
+}
+
+class _AddPlacePageState extends State<_AddPlacePage> {
+  final _formKey = GlobalKey<FormState>();
+  final MapController _mapController = MapController();
+
+  late final TextEditingController _nameController;
+  late final TextEditingController _categoryController;
+  late final TextEditingController _addressController;
+  late final TextEditingController _locatedWithinController;
+  late final TextEditingController _phoneController;
+  late final TextEditingController _websiteController;
+  late final TextEditingController _descriptionController;
+
+  LatLng? _selectedLocation;
+  late LatLng _mapCenter;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController();
+    _categoryController = TextEditingController();
+    _addressController = TextEditingController();
+    _locatedWithinController = TextEditingController();
+    _phoneController = TextEditingController();
+    _websiteController = TextEditingController();
+    _descriptionController = TextEditingController();
+    _selectedLocation = widget.initialLocation;
+    _mapCenter = widget.initialLocation;
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _categoryController.dispose();
+    _addressController.dispose();
+    _locatedWithinController.dispose();
+    _phoneController.dispose();
+    _websiteController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  void _selectLocation(LatLng point) {
+    setState(() {
+      _selectedLocation = point;
+    });
+  }
+
+  void _useMapCenter() {
+    _selectLocation(_mapCenter);
+  }
+
+  String? _validateRequired(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'এই তথ্য প্রয়োজন।';
+    }
+    return null;
+  }
+
+  String? _optionalText(TextEditingController controller) {
+    final text = controller.text.trim();
+    return text.isEmpty ? null : text;
+  }
+
+  void _submit() {
+    if (_formKey.currentState?.validate() != true) {
+      return;
+    }
+
+    final location = _selectedLocation;
+    if (location == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('দয়া করে মানচিত্রে একটি স্থান নির্বাচন করুন।')),
+      );
+      return;
+    }
+
+    final place = _CustomPlace(
+      name: _nameController.text.trim(),
+      category: _categoryController.text.trim(),
+      address: _addressController.text.trim(),
+      location: location,
+      locatedWithin: _optionalText(_locatedWithinController),
+      phone: _optionalText(_phoneController),
+      website: _optionalText(_websiteController),
+      description: _optionalText(_descriptionController),
+      createdAt: DateTime.now(),
+    );
+
+    Navigator.of(context).pop(place);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final location = _selectedLocation;
+    final locationSummary = location != null
+        ? 'নির্বাচিত স্থান: ${_formatLatLng(location)}'
+        : 'মানচিত্রে ট্যাপ করে অবস্থান নির্বাচন করুন।';
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('নতুন স্থান যোগ করুন'),
+        leading: const CloseButton(),
+        actions: [
+          TextButton(
+            onPressed: _submit,
+            child: const Text('সংরক্ষণ'),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.only(bottom: bottomInset + 24),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'মানচিত্রে অবস্থান নির্বাচন করুন',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: SizedBox(
+                      height: 260,
+                      child: FlutterMap(
+                        mapController: _mapController,
+                        options: MapOptions(
+                          initialCenter: location ?? widget.initialLocation,
+                          initialZoom: 17,
+                          onTap: (tapPosition, point) => _selectLocation(point),
+                          onMapEvent: (event) {
+                            _mapCenter = event.camera.center;
+                          },
+                        ),
+                        children: [
+                          TileLayer(
+                            urlTemplate:
+                                'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            subdomains: const ['a', 'b', 'c'],
+                            userAgentPackageName: 'com.example.balumohol',
+                          ),
+                          if (location != null)
+                            MarkerLayer(
+                              markers: [
+                                Marker(
+                                  point: location,
+                                  width: 40,
+                                  height: 40,
+                                  child: const Icon(
+                                    Icons.location_on,
+                                    color: Colors.red,
+                                    size: 40,
+                                  ),
+                                ),
+                              ],
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          locationSummary,
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: _useMapCenter,
+                        icon: const Icon(Icons.center_focus_strong),
+                        label: const Text('কেন্দ্র নির্বাচন'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'স্থান সম্পর্কে তথ্য দিন',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'স্থান নাম (আবশ্যিক)',
+                      hintText: 'উদাহরণ: রহমান ট্রেডার্স',
+                    ),
+                    textInputAction: TextInputAction.next,
+                    validator: _validateRequired,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _categoryController,
+                    decoration: const InputDecoration(
+                      labelText: 'বিভাগ (আবশ্যিক)',
+                      hintText: 'উদাহরণ: মুদি দোকান',
+                    ),
+                    textInputAction: TextInputAction.next,
+                    validator: _validateRequired,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _addressController,
+                    decoration: const InputDecoration(
+                      labelText: 'ঠিকানা (আবশ্যিক)',
+                      hintText: 'রাস্তা, গ্রাম বা বাড়ি নম্বর',
+                    ),
+                    textInputAction: TextInputAction.next,
+                    validator: _validateRequired,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _locatedWithinController,
+                    decoration: const InputDecoration(
+                      labelText: 'কোন স্থানের ভিতরে (ঐচ্ছিক)',
+                      hintText: 'উদাহরণ: বাজার কমপ্লেক্স',
+                    ),
+                    textInputAction: TextInputAction.next,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _phoneController,
+                    decoration: const InputDecoration(
+                      labelText: 'ফোন (ঐচ্ছিক)',
+                      hintText: 'উদাহরণ: ০১৭XXXXXXXX',
+                    ),
+                    keyboardType: TextInputType.phone,
+                    textInputAction: TextInputAction.next,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _websiteController,
+                    decoration: const InputDecoration(
+                      labelText: 'ওয়েবসাইট (ঐচ্ছিক)',
+                      hintText: 'উদাহরণ: https://example.com',
+                    ),
+                    keyboardType: TextInputType.url,
+                    textInputAction: TextInputAction.next,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _descriptionController,
+                    decoration: const InputDecoration(
+                      labelText: 'অতিরিক্ত তথ্য (ঐচ্ছিক)',
+                      hintText: 'পরিচিতি, সময়সূচি বা অন্যান্য তথ্য',
+                    ),
+                    maxLines: 3,
+                    textInputAction: TextInputAction.done,
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _submit,
+                      icon: const Icon(Icons.check_circle),
+                      label: const Text('স্থান সংরক্ষণ করুন'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _PositionSample {
   const _PositionSample({
     required this.latitude,
@@ -680,10 +1324,99 @@ class _PositionSample {
 }
 
 class _PolygonFeature {
-  const _PolygonFeature({required this.outer, required this.holes});
+  const _PolygonFeature({
+    required this.id,
+    required this.outer,
+    required this.holes,
+    required this.properties,
+  });
 
+  final String id;
   final List<LatLng> outer;
   final List<List<LatLng>> holes;
+  final Map<String, dynamic> properties;
+}
+
+class _CustomPlace {
+  const _CustomPlace({
+    required this.name,
+    required this.category,
+    required this.address,
+    required this.location,
+    this.locatedWithin,
+    this.phone,
+    this.website,
+    this.description,
+    required this.createdAt,
+  });
+
+  factory _CustomPlace.fromJson(Map<String, dynamic> json) {
+    final latitude = (json['lat'] as num?)?.toDouble();
+    final longitude = (json['lng'] as num?)?.toDouble();
+    final createdAtMs = json['createdAt'] as int?;
+
+    return _CustomPlace(
+      name: (json['name'] as String? ?? '').trim(),
+      category: (json['category'] as String? ?? '').trim(),
+      address: (json['address'] as String? ?? '').trim(),
+      location: LatLng(latitude ?? 0, longitude ?? 0),
+      locatedWithin: (json['locatedWithin'] as String?).emptyToNull(),
+      phone: (json['phone'] as String?).emptyToNull(),
+      website: (json['website'] as String?).emptyToNull(),
+      description: (json['description'] as String?).emptyToNull(),
+      createdAt: createdAtMs != null
+          ? DateTime.fromMillisecondsSinceEpoch(createdAtMs)
+          : DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'category': category,
+      'address': address,
+      'lat': location.latitude,
+      'lng': location.longitude,
+      'locatedWithin': locatedWithin,
+      'phone': phone,
+      'website': website,
+      'description': description,
+      'createdAt': createdAt.millisecondsSinceEpoch,
+    };
+  }
+
+  final String name;
+  final String category;
+  final String address;
+  final LatLng location;
+  final String? locatedWithin;
+  final String? phone;
+  final String? website;
+  final String? description;
+  final DateTime createdAt;
+
+  List<MapEntry<String, String>> details() {
+    final entries = <MapEntry<String, String>>[
+      MapEntry('বিভাগ', _toBanglaDigits(category)),
+      MapEntry('ঠিকানা', _toBanglaDigits(address)),
+    ];
+
+    if (locatedWithin != null && locatedWithin!.isNotEmpty) {
+      entries.add(MapEntry('অবস্থান', _toBanglaDigits(locatedWithin!)));
+    }
+    if (phone != null && phone!.isNotEmpty) {
+      entries.add(MapEntry('ফোন', _toBanglaDigits(phone!)));
+    }
+    if (website != null && website!.isNotEmpty) {
+      entries.add(MapEntry('ওয়েবসাইট', website!));
+    }
+    if (description != null && description!.isNotEmpty) {
+      entries.add(MapEntry('বিস্তারিত', _toBanglaDigits(description!)));
+    }
+    entries.add(MapEntry('সময়', _formatTimestamp(createdAt.millisecondsSinceEpoch)));
+    entries.add(MapEntry('সমন্বয়', _formatLatLng(location)));
+    return entries;
+  }
 }
 
 class LocationHistoryEntry {
@@ -790,23 +1523,144 @@ String _formatTimestamp(int timestampMs) {
   return _toBanglaDigits('$year-$month-$day $hour:$minute:$second');
 }
 
+List<MapEntry<String, String>> _polygonReadableProperties(
+    _PolygonFeature polygon) {
+  const preferredOrder = <String>[
+    'plot_number',
+    'mouza_name',
+    'upazila',
+    'Remarks',
+    'Shape_Length',
+    'Shape_Area',
+  ];
+
+  final props = polygon.properties;
+  final seen = <String>{};
+  final ordered = <MapEntry<String, dynamic>>[];
+
+  for (final key in preferredOrder) {
+    if (props.containsKey(key)) {
+      ordered.add(MapEntry(key, props[key]));
+      seen.add(key);
+    }
+  }
+
+  for (final entry in props.entries) {
+    if (seen.contains(entry.key)) continue;
+    ordered.add(MapEntry(entry.key, entry.value));
+  }
+
+  return ordered
+      .where((entry) => !_isNullOrEmpty(entry.value))
+      .map(
+        (entry) => MapEntry(
+          _prettifyPropertyKey(entry.key),
+          _formatPropertyValue(entry.value),
+        ),
+      )
+      .toList();
+}
+
+bool _isNullOrEmpty(dynamic value) {
+  if (value == null) return true;
+  if (value is String) return value.trim().isEmpty;
+  if (value is Iterable || value is Map) return value.isEmpty;
+  return false;
+}
+
+String _prettifyPropertyKey(String key) {
+  final cleaned = key.replaceAll('_', ' ').trim();
+  if (cleaned.isEmpty) {
+    return key;
+  }
+
+  final words = cleaned.split(RegExp(r'\s+'));
+  return words
+      .map((word) {
+        if (word.isEmpty) return word;
+        final hasLower = word.contains(RegExp(r'[a-z]'));
+        final hasUpper = word.contains(RegExp(r'[A-Z]'));
+        if (hasUpper && !hasLower) {
+          return word;
+        }
+        return word[0].toUpperCase() + word.substring(1).toLowerCase();
+      })
+      .join(' ');
+}
+
+String _formatPropertyValue(dynamic value) {
+  if (value == null) {
+    return 'উপলব্ধ নয়';
+  }
+  if (value is int) {
+    return _formatNumber(value, fractionDigits: 0);
+  }
+  if (value is double) {
+    final fractionDigits = (value - value.roundToDouble()).abs() < 1e-6 ? 0 : 2;
+    return _formatNumber(value, fractionDigits: fractionDigits);
+  }
+  if (value is num) {
+    return _formatNumber(value, fractionDigits: 2);
+  }
+  if (value is String) {
+    return _toBanglaDigits(value.trim());
+  }
+  return value.toString();
+}
+
+String _formatLatLng(LatLng point, {int fractionDigits = 6}) {
+  final latText = _formatNumber(point.latitude, fractionDigits: fractionDigits);
+  final lngText = _formatNumber(point.longitude, fractionDigits: fractionDigits);
+  return '$latText, $lngText';
+}
+
+extension _NullableStringUtils on String? {
+  String? emptyToNull() {
+    final value = this;
+    if (value == null) return null;
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+}
+
 List<_PolygonFeature> _parsePolygons(Map<String, dynamic> data) {
   final features = data['features'] as List<dynamic>? ?? [];
   final polygons = <_PolygonFeature>[];
 
-  for (final feature in features) {
-    final geometry =
-        (feature as Map<String, dynamic>)['geometry'] as Map<String, dynamic>?;
+  for (int index = 0; index < features.length; index++) {
+    final feature = features[index];
+    if (feature is! Map<String, dynamic>) continue;
+    final geometry = feature['geometry'] as Map<String, dynamic>?;
     if (geometry == null) continue;
     final type = geometry['type'] as String?;
     final coordinates = geometry['coordinates'];
+    final properties = <String, dynamic>{};
+    final rawProps = feature['properties'];
+    if (rawProps is Map) {
+      for (final entry in rawProps.entries) {
+        properties[entry.key.toString()] = entry.value;
+      }
+    }
 
     if (type == 'Polygon' && coordinates is List) {
-      polygons.add(_polygonFromCoords(coordinates.cast<List<dynamic>>()));
+      polygons.add(
+        _polygonFromCoords(
+          id: 'feature_$index',
+          coordinates: coordinates.cast<List<dynamic>>(),
+          properties: properties,
+        ),
+      );
     } else if (type == 'MultiPolygon' && coordinates is List) {
-      for (final polygonCoords in coordinates) {
+      for (int polyIndex = 0; polyIndex < coordinates.length; polyIndex++) {
+        final polygonCoords = coordinates[polyIndex];
         if (polygonCoords is List) {
-          polygons.add(_polygonFromCoords(polygonCoords.cast<List<dynamic>>()));
+          polygons.add(
+            _polygonFromCoords(
+              id: 'feature_${index}_$polyIndex',
+              coordinates: polygonCoords.cast<List<dynamic>>(),
+              properties: properties,
+            ),
+          );
         }
       }
     }
@@ -815,14 +1669,31 @@ List<_PolygonFeature> _parsePolygons(Map<String, dynamic> data) {
   return polygons;
 }
 
-_PolygonFeature _polygonFromCoords(List<List<dynamic>> coordinates) {
+_PolygonFeature _polygonFromCoords({
+  required String id,
+  required List<List<dynamic>> coordinates,
+  required Map<String, dynamic> properties,
+}) {
   if (coordinates.isEmpty) {
-    return const _PolygonFeature(outer: [], holes: []);
+    return _PolygonFeature(
+      id: id,
+      outer: const [],
+      holes: const [],
+      properties: Map<String, dynamic>.unmodifiable(properties),
+    );
   }
 
   final outer = _latLngListFromRing(coordinates.first);
-  final holes = coordinates.skip(1).map(_latLngListFromRing).toList();
-  return _PolygonFeature(outer: outer, holes: holes);
+  final holes = coordinates
+      .skip(1)
+      .map<List<LatLng>>(_latLngListFromRing)
+      .toList(growable: false);
+  return _PolygonFeature(
+    id: id,
+    outer: outer,
+    holes: holes,
+    properties: Map<String, dynamic>.unmodifiable(properties),
+  );
 }
 
 List<LatLng> _latLngListFromRing(List<dynamic> ring) {
