@@ -56,7 +56,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     final currentMarker = _buildCurrentLocationMarker(controller);
     final historyMarkers = _buildHistoryMarkers(controller);
     final customPlaceMarkers =
-        _showCustomPlaceMarkers ? _buildCustomPlaceMarkers(controller) : const [];
+        _showCustomPlaceMarkers ? _buildCustomPlaceMarkers(controller) : <Marker>[];
 
     final accuracyValue = controller.currentAccuracy;
     final accuracyText = accuracyValue != null
