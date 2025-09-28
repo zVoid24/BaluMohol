@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:balumohol/features/geofence/models/custom_place.dart';
+import 'package:balumohol/features/geofence/presentation/widgets/google_style_marker.dart';
 import 'package:balumohol/features/geofence/utils/place_category_styles.dart';
 
 class CustomPlaceMarker extends StatelessWidget {
@@ -25,11 +26,10 @@ class CustomPlaceMarker extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (markerLabel.isNotEmpty)
+            if (markerLabel.isNotEmpty) ...[
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                margin: const EdgeInsets.only(bottom: 6),
                 decoration: BoxDecoration(
                   color: style.color,
                   borderRadius: BorderRadius.circular(20),
@@ -66,6 +66,9 @@ class CustomPlaceMarker extends StatelessWidget {
                   ],
                 ),
               ),
+              const SizedBox(height: 6),
+            ],
+            GoogleStyleMarker(color: style.color),
           ],
         ),
       ),
