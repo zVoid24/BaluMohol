@@ -24,7 +24,19 @@ class GeofenceMapPage extends StatefulWidget {
 }
 
 class _GeofenceMapPageState extends State<GeofenceMapPage> {
+  static const double _customPlaceMarkerZoomThreshold = 14;
+
   bool _initialised = false;
+  double _currentZoom = 15;
+
+  bool get _showCustomPlaceMarkers =>
+      _currentZoom >= _customPlaceMarkerZoomThreshold;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentZoom = 15;
+  }
 
   @override
   void didChangeDependencies() {
@@ -43,7 +55,8 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     final controller = context.watch<GeofenceMapController>();
     final currentMarker = _buildCurrentLocationMarker(controller);
     final historyMarkers = _buildHistoryMarkers(controller);
-    final customPlaceMarkers = _buildCustomPlaceMarkers(controller);
+    final customPlaceMarkers =
+        _showCustomPlaceMarkers ? _buildCustomPlaceMarkers(controller) : const [];
 
     final accuracyValue = controller.currentAccuracy;
     final accuracyText = accuracyValue != null
@@ -97,6 +110,14 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
                 controller.highlightPolygon(null);
               },
               onMapReady: controller.onMapReady,
+              onMapEvent: (event) {
+                final zoom = event.camera.zoom;
+                if ((zoom - _currentZoom).abs() > 0.01) {
+                  setState(() {
+                    _currentZoom = zoom;
+                  });
+                }
+              },
             ),
             children: [
               TileLayer(
@@ -214,8 +235,8 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
         .map(
           (place) => Marker(
             point: place.location,
-            width: 120,
-            height: 120,
+            width: 160,
+            height: 140,
             alignment: Alignment.topCenter,
             child: CustomPlaceMarker(
               place: place,
