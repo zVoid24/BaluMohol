@@ -74,7 +74,9 @@ class _AddPlacePageState extends State<AddPlacePage> {
   String? _selectedImageFileName;
   Timer? _addressDebounce;
   int _addressRequestId = 0;
+  int _reverseGeocodeRequestId = 0;
   bool _isFetchingAddressOptions = false;
+  bool _isReverseGeocoding = false;
   bool _isHandlingAddressSelection = false;
   List<_AddressSuggestion> _addressOptions = <_AddressSuggestion>[];
   String? _addressLookupMessage;
@@ -92,6 +94,9 @@ class _AddPlacePageState extends State<AddPlacePage> {
     _descriptionController = TextEditingController();
     _selectedLocation = widget.initialLocation;
     _mapCenter = widget.initialLocation;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _setSelectedLocation(widget.initialLocation, updateAddress: true);
+    });
   }
 
   @override
@@ -116,6 +121,8 @@ class _AddPlacePageState extends State<AddPlacePage> {
     _addressDebounce?.cancel();
     final trimmed = value.trim();
 
+    _reverseGeocodeRequestId++;
+
     if (trimmed.length < 3) {
       _addressRequestId++;
       setState(() {
@@ -123,6 +130,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
         _addressLookupMessage = null;
         _addressLookupIsError = false;
         _isFetchingAddressOptions = false;
+        _isReverseGeocoding = false;
       });
       return;
     }
@@ -131,6 +139,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
       _addressOptions = <_AddressSuggestion>[];
       _addressLookupMessage = null;
       _addressLookupIsError = false;
+      _isReverseGeocoding = false;
     });
 
     _addressDebounce = Timer(const Duration(milliseconds: 400), () {
@@ -153,6 +162,8 @@ class _AddPlacePageState extends State<AddPlacePage> {
         'format': 'jsonv2',
         'addressdetails': '1',
         'limit': '5',
+        'autocomplete': '1',
+        'dedupe': '1',
       });
       final response = await http.get(uri, headers: const {
         'User-Agent': 'balumohol-app/1.0 (balumohol@example.com)',
@@ -219,14 +230,16 @@ class _AddPlacePageState extends State<AddPlacePage> {
     _isHandlingAddressSelection = false;
 
     _addressRequestId++;
+    _reverseGeocodeRequestId++;
+
+    _setSelectedLocation(suggestion.location, updateAddress: false);
 
     setState(() {
       _addressOptions = <_AddressSuggestion>[];
       _addressLookupMessage = null;
       _addressLookupIsError = false;
-      _selectedLocation = suggestion.location;
-      _mapCenter = suggestion.location;
       _isFetchingAddressOptions = false;
+      _isReverseGeocoding = false;
     });
 
     _mapController.move(
@@ -272,14 +285,97 @@ class _AddPlacePageState extends State<AddPlacePage> {
     );
   }
 
-  void _selectLocation(LatLng point) {
+  void _setSelectedLocation(LatLng point, {bool updateAddress = true}) {
     setState(() {
       _selectedLocation = point;
+      _mapCenter = point;
+      _addressLookupMessage = null;
+      _addressLookupIsError = false;
     });
+    if (updateAddress) {
+      _reverseGeocode(point);
+    }
   }
 
   void _useMapCenter() {
-    _selectLocation(_mapCenter);
+    _setSelectedLocation(_mapCenter, updateAddress: true);
+  }
+
+  Future<void> _reverseGeocode(LatLng point) async {
+    final requestId = ++_reverseGeocodeRequestId;
+
+    setState(() {
+      _isReverseGeocoding = true;
+      _addressOptions = <_AddressSuggestion>[];
+      _addressLookupMessage = 'Fetching address for selected location...';
+      _addressLookupIsError = false;
+    });
+
+    try {
+      final uri = Uri.https('nominatim.openstreetmap.org', '/reverse', {
+        'lat': point.latitude.toString(),
+        'lon': point.longitude.toString(),
+        'format': 'jsonv2',
+        'addressdetails': '1',
+        'zoom': '18',
+      });
+
+      final response = await http.get(uri, headers: const {
+        'User-Agent': 'balumohol-app/1.0 (balumohol@example.com)',
+      });
+
+      if (!mounted || requestId != _reverseGeocodeRequestId) {
+        return;
+      }
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data =
+            jsonDecode(response.body) as Map<String, dynamic>;
+        final displayName = data['display_name'] as String? ?? '';
+
+        if (displayName.isNotEmpty) {
+          _addressRequestId++;
+          _isHandlingAddressSelection = true;
+          _addressController.value = TextEditingValue(
+            text: displayName,
+            selection: TextSelection.collapsed(offset: displayName.length),
+          );
+          _isHandlingAddressSelection = false;
+          setState(() {
+            _addressLookupMessage = null;
+            _addressLookupIsError = false;
+          });
+        } else {
+          setState(() {
+            _addressLookupMessage =
+                'No address details found for this location.';
+            _addressLookupIsError = false;
+          });
+        }
+      } else {
+        setState(() {
+          _addressLookupMessage =
+              'Unable to determine the address for the selected location.';
+          _addressLookupIsError = true;
+        });
+      }
+    } catch (_) {
+      if (!mounted || requestId != _reverseGeocodeRequestId) {
+        return;
+      }
+      setState(() {
+        _addressLookupMessage =
+            'Unable to determine the address. Please check your connection.';
+        _addressLookupIsError = true;
+      });
+    } finally {
+      if (!mounted || requestId != _reverseGeocodeRequestId) {
+        return;
+      }
+      setState(() {
+        _isReverseGeocoding = false;
+      });
+    }
   }
 
   Future<void> _showCategoryPicker() async {
@@ -513,7 +609,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
                                 initialCenter: widget.initialLocation,
                                 initialZoom: 17,
                                 onTap: (tapPosition, point) {
-                                  _selectLocation(point);
+                                  _setSelectedLocation(point);
                                 },
                                 onMapEvent: (event) {
                                   _mapCenter = _mapController.camera.center;
@@ -620,18 +716,20 @@ class _AddPlacePageState extends State<AddPlacePage> {
                                     label: 'Address (required)',
                                     hint:
                                         'Street, village, or house number',
-                                    suffixIcon: _isFetchingAddressOptions
-                                        ? const Padding(
-                                            padding: EdgeInsets.all(12),
-                                            child: SizedBox(
-                                              width: 16,
-                                              height: 16,
-                                              child:
-                                                  CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                              ),
-                                            ),
-                                          )
+                                    suffixIcon:
+                                        (_isFetchingAddressOptions ||
+                                                _isReverseGeocoding)
+                                            ? const Padding(
+                                                padding: EdgeInsets.all(12),
+                                                child: SizedBox(
+                                                  width: 16,
+                                                  height: 16,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                    strokeWidth: 2,
+                                                  ),
+                                                ),
+                                              )
                                         : const Icon(
                                             Icons.place_outlined,
                                           ),
