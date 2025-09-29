@@ -43,6 +43,9 @@ class GeofenceMapController extends ChangeNotifier {
   double? _pendingZoom;
   double? _pendingRotation;
   PolygonFeature? _selectedPolygon;
+  PolygonFeature? _primaryPolygon;
+  PolygonFeature? _dissolvedPolygon;
+  LatLng? _primaryCenter;
 
   SharedPreferences? _prefs;
   StreamSubscription<Position>? _positionSubscription;
@@ -84,6 +87,8 @@ class GeofenceMapController extends ChangeNotifier {
   bool get permissionDenied => _permissionDenied;
   LatLng get fallbackCenter => _fallbackCenter;
   PolygonFeature? get selectedPolygon => _selectedPolygon;
+  PolygonFeature? get dissolvedPolygon => _dissolvedPolygon;
+  LatLng? get primaryCenter => _primaryCenter;
 
   void onMapReady() {
     _mapReady = true;
@@ -113,6 +118,31 @@ class GeofenceMapController extends ChangeNotifier {
       return;
     }
     mapController.rotate(0);
+  }
+
+  void centerOnPrimaryArea() {
+    if (_primaryPolygon != null) {
+      highlightPolygon(_primaryPolygon);
+    } else {
+      highlightPolygon(null);
+    }
+
+    final targetPolygon = _dissolvedPolygon ?? _primaryPolygon;
+    if (targetPolygon != null) {
+      final bounds = _boundsForPolygon(targetPolygon);
+      if (bounds != null) {
+        final zoom = _zoomForBounds(bounds);
+        moveMap(bounds.center, zoom);
+        return;
+      }
+    }
+
+    if (_primaryCenter != null) {
+      moveMap(_primaryCenter!, 16);
+      return;
+    }
+
+    moveMap(_fallbackCenter, 15);
   }
 
   Future<void> calibrateNow() async {
@@ -176,12 +206,37 @@ class GeofenceMapController extends ChangeNotifier {
       final Map<String, dynamic> data =
           json.decode(raw) as Map<String, dynamic>;
       final polygons = parsePolygons(data);
+      final dissolved = dissolvePolygons(polygons);
       final center = computeBoundsCenter(polygons);
+      final centralPolygon = _findCentralPolygon(polygons, center);
+      final resolvedCenter = dissolved != null
+          ? polygonCentroid(dissolved)
+          : (centralPolygon != null
+              ? polygonCentroid(centralPolygon)
+              : center);
       _polygons
         ..clear()
         ..addAll(polygons);
       _selectedPolygon = null;
-      if (center != null) {
+      _primaryPolygon = centralPolygon;
+      _dissolvedPolygon = dissolved;
+      _primaryCenter = resolvedCenter ?? center;
+
+      final focusPolygon = _dissolvedPolygon ?? _primaryPolygon;
+      if (focusPolygon != null) {
+        final bounds = _boundsForPolygon(focusPolygon);
+        if (bounds != null) {
+          _fallbackCenter = bounds.center;
+          _pendingCenter = bounds.center;
+          _pendingZoom = _zoomForBounds(bounds);
+        }
+      }
+
+      if (_pendingCenter == null && _primaryCenter != null) {
+        _fallbackCenter = _primaryCenter!;
+        _pendingCenter = _primaryCenter;
+        _pendingZoom = 16;
+      } else if (_pendingCenter == null && center != null) {
         _fallbackCenter = center;
         _pendingCenter = center;
         _pendingZoom = 16;
@@ -239,6 +294,42 @@ class GeofenceMapController extends ChangeNotifier {
     final encoded =
         json.encode(_customPlaces.map((place) => place.toJson()).toList());
     await _prefs?.setString(customPlacesStorageKey, encoded);
+  }
+
+  PolygonFeature? _findCentralPolygon(
+    List<PolygonFeature> polygons,
+    LatLng? overallCenter,
+  ) {
+    if (polygons.isEmpty) {
+      return null;
+    }
+
+    PolygonFeature? candidate;
+    double closestDistance = double.infinity;
+
+    if (overallCenter != null) {
+      for (final polygon in polygons) {
+        if (polygon.outer.isEmpty) continue;
+        final centroid = polygonCentroid(polygon);
+        if (centroid == null) continue;
+        final distance = Geolocator.distanceBetween(
+          overallCenter.latitude,
+          overallCenter.longitude,
+          centroid.latitude,
+          centroid.longitude,
+        );
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          candidate = polygon;
+        }
+      }
+    }
+
+    candidate ??= polygons.firstWhere(
+      (polygon) => polygon.outer.isNotEmpty,
+      orElse: () => polygons.first,
+    );
+    return candidate;
   }
 
   _PolygonBounds? _boundsForPolygon(PolygonFeature polygon) {

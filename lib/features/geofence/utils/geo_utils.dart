@@ -87,6 +87,32 @@ List<LatLng> _latLngListFromRing(List<dynamic> ring) {
   }).toList();
 }
 
+LatLng? polygonCentroid(PolygonFeature polygon) {
+  if (polygon.outer.isEmpty) {
+    return null;
+  }
+  return _centroidOfRing(polygon.outer);
+}
+
+PolygonFeature? dissolvePolygons(List<PolygonFeature> polygons) {
+  final points = <LatLng>[];
+  for (final polygon in polygons) {
+    points.addAll(polygon.outer);
+  }
+
+  final hull = _convexHull(points);
+  if (hull.length < 3) {
+    return null;
+  }
+
+  return PolygonFeature(
+    id: 'dissolved',
+    outer: hull,
+    holes: const [],
+    properties: const {'type': 'dissolved'},
+  );
+}
+
 LatLng? computeBoundsCenter(List<PolygonFeature> polygons) {
   double? minLat, maxLat, minLng, maxLng;
 
@@ -227,4 +253,95 @@ double _distanceToSegment(LatLng point, LatLng start, LatLng end) {
   final dx = p.x - closest.x;
   final dy = p.y - closest.y;
   return math.sqrt(dx * dx + dy * dy);
+}
+
+LatLng? _centroidOfRing(List<LatLng> ring) {
+  if (ring.isEmpty) {
+    return null;
+  }
+
+  double area = 0;
+  double cx = 0;
+  double cy = 0;
+
+  for (int i = 0; i < ring.length; i++) {
+    final current = ring[i];
+    final next = ring[(i + 1) % ring.length];
+    final double cross =
+        current.longitude * next.latitude - next.longitude * current.latitude;
+    area += cross;
+    cx += (current.longitude + next.longitude) * cross;
+    cy += (current.latitude + next.latitude) * cross;
+  }
+
+  final double areaValue = area / 2;
+  if (areaValue.abs() < 1e-12) {
+    double avgLat = 0;
+    double avgLng = 0;
+    for (final point in ring) {
+      avgLat += point.latitude;
+      avgLng += point.longitude;
+    }
+    final double count = ring.length.toDouble();
+    return LatLng(avgLat / count, avgLng / count);
+  }
+
+  final double factor = 1 / (6 * areaValue);
+  final double centroidLng = cx * factor;
+  final double centroidLat = cy * factor;
+  return LatLng(centroidLat, centroidLng);
+}
+
+List<LatLng> _convexHull(List<LatLng> points) {
+  if (points.length <= 1) {
+    return List<LatLng>.from(points);
+  }
+
+  final deduplicated = <LatLng>[];
+  final seen = <String>{};
+  for (final point in points) {
+    final key = '${point.latitude}:${point.longitude}';
+    if (seen.add(key)) {
+      deduplicated.add(point);
+    }
+  }
+
+  deduplicated.sort((a, b) {
+    final lngCompare = a.longitude.compareTo(b.longitude);
+    if (lngCompare != 0) {
+      return lngCompare;
+    }
+    return a.latitude.compareTo(b.latitude);
+  });
+
+  double cross(LatLng o, LatLng a, LatLng b) {
+    return (a.longitude - o.longitude) * (b.latitude - o.latitude) -
+        (a.latitude - o.latitude) * (b.longitude - o.longitude);
+  }
+
+  final lower = <LatLng>[];
+  for (final point in deduplicated) {
+    while (lower.length >= 2 &&
+        cross(lower[lower.length - 2], lower.last, point) <= 0) {
+      lower.removeLast();
+    }
+    lower.add(point);
+  }
+
+  final upper = <LatLng>[];
+  for (final point in deduplicated.reversed) {
+    while (upper.length >= 2 &&
+        cross(upper[upper.length - 2], upper.last, point) <= 0) {
+      upper.removeLast();
+    }
+    upper.add(point);
+  }
+
+  if (lower.isEmpty) {
+    return List<LatLng>.from(deduplicated);
+  }
+
+  lower.removeLast();
+  upper.removeLast();
+  return [...lower, ...upper];
 }
