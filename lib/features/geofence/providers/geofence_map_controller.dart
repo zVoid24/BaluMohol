@@ -363,7 +363,7 @@ class GeofenceMapController extends ChangeNotifier {
     if (inside) {
       return const GeofenceResult(
         inside: true,
-        statusMessage: '✅ আপনি লক্ষ্য এলাকায় আছেন!',
+        statusMessage: '✅ আপনি নির্ধারিত এলাকায় আছেন!',
       );
     }
 
@@ -372,7 +372,7 @@ class GeofenceMapController extends ChangeNotifier {
         : '—';
     return GeofenceResult(
       inside: false,
-      statusMessage: '❌ আপনি লক্ষ্য এলাকায় নেই। দূরত্ব: $distanceText।',
+      statusMessage: '❌ আপনি নির্ধারিত এলাকায় নেই। দূরত্ব: $distanceText।',
     );
   }
 

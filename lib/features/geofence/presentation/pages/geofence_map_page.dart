@@ -354,8 +354,8 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
         ? formatMeters(accuracyValue, fractionDigits: 1)
         : 'উপলব্ধ নয়';
     final insideText = controller.insideTarget
-        ? 'আপনি লক্ষ্য এলাকায় আছেন'
-        : 'আপনি লক্ষ্য এলাকায় নেই';
+        ? 'আপনি নির্ধারিত এলাকায় আছেন'
+        : 'আপনি নির্ধারিত এলাকায় নেই';
 
     await showDialog<void>(
       context: context,
@@ -398,7 +398,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
               Text('অক্ষাংশ: ${formatCoordinate(entry.latitude)}'),
               Text('দ্রাঘিমাংশ: ${formatCoordinate(entry.longitude)}'),
               Text('সঠিকতা: ${formatMeters(entry.accuracy, fractionDigits: 1)}'),
-              Text('লক্ষ্য সীমানার ভেতরে: ${entry.inside ? 'হ্যাঁ' : 'না'}'),
+              Text('নির্ধারিত সীমানার ভেতরে: ${entry.inside ? 'হ্যাঁ' : 'না'}'),
               Text('সময়: ${formatTimestampBangla(entry.timestampMs)}'),
             ],
           ),

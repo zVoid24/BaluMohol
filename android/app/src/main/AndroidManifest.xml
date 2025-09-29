@@ -6,7 +6,7 @@
 
 
     <application
-        android:label="Balu Mohol"
+        android:label="স্মার্ট বালুমহাল"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
