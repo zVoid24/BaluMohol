@@ -14,38 +14,69 @@ class StatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: EdgeInsets.zero,
-      color: Colors.white.withOpacity(0.95),
-      elevation: 6,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 320),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'জিপিএস এর অবস্থা:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 6),
-              Text('সঠিকতা: $accuracyText'),
-              const SizedBox(height: 4),
-              Text(statusMessage),
-              if (errorMessage != null) ...[
-                const SizedBox(height: 6),
-                Text(
-                  errorMessage!,
-                  style: const TextStyle(color: Colors.red),
-                ),
-              ],
-            ],
+    final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
+    final colorScheme = theme.colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'জিপিএস এর অবস্থা',
+          style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        _StatusLine(
+          icon: Icons.speed,
+          text: 'সঠিকতা: $accuracyText',
+          color: colorScheme.onSurfaceVariant,
+        ),
+        const SizedBox(height: 6),
+        _StatusLine(
+          icon: Icons.info_outline,
+          text: statusMessage,
+          color: colorScheme.onSurfaceVariant,
+        ),
+        if (errorMessage != null && errorMessage!.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          _StatusLine(
+            icon: Icons.warning_amber_rounded,
+            text: errorMessage!,
+            color: colorScheme.error,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _StatusLine extends StatelessWidget {
+  const _StatusLine({
+    required this.icon,
+    required this.text,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 20, color: color),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: textTheme.bodyMedium?.copyWith(color: color),
           ),
         ),
-      ),
+      ],
     );
   }
 }

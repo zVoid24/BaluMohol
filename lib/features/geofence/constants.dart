@@ -85,7 +85,7 @@ const preferredPropertyOrder = <String>[
   'Shape_Area',
 ];
 
-final polygonBaseBorderColor = Colors.blue.shade600;
-final polygonSelectedBorderColor = Colors.orange.shade700;
-final polygonBaseFillColor = const Color(0xFF42A5F5).withOpacity(0.2);
-final polygonSelectedFillColor = const Color(0xFFFFB74D).withOpacity(0.35);
+final polygonBaseBorderColor = Colors.blueGrey.shade700;
+final polygonSelectedBorderColor = Colors.orange.shade800;
+final polygonBaseFillColor = const Color(0xFF1E88E5).withOpacity(0.22);
+final polygonSelectedFillColor = const Color(0xFFFF9800).withOpacity(0.38);
