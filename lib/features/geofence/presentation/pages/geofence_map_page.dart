@@ -309,7 +309,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
 
   Future<void> _showPolygonSelector(GeofenceMapController controller) async {
     final polygons = controller.polygons;
-    controller.focusPolygon(polygons[59]);
+    controller.focusPolygon(polygons[59], highlight: false);
     // //print(polygons);
     // if (polygons.isEmpty) {
     //   if (!mounted) return;
