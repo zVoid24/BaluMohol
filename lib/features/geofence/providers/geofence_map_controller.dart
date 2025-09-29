@@ -22,6 +22,8 @@ import 'package:balumohol/features/geofence/utils/geo_utils.dart';
 class GeofenceMapController extends ChangeNotifier {
   GeofenceMapController();
 
+  static const String _defaultMouzaName = '40_RAHATPUR_1';
+
   void _refreshVisiblePolygons({bool notify = true}) {
     _visiblePolygons
       ..clear()
@@ -53,8 +55,8 @@ class GeofenceMapController extends ChangeNotifier {
   final List<LocationHistoryEntry> _history = [];
   final List<LatLng> _trackingPath = [];
   final List<CustomPlace> _customPlaces = [];
-  bool _showBoundary = true;
-  bool _showOtherPolygons = true;
+  bool _showBoundary = false;
+  bool _showOtherPolygons = false;
 
   LatLng? _currentLocation;
   double? _currentAccuracy;
@@ -241,6 +243,12 @@ class GeofenceMapController extends ChangeNotifier {
     }
     _showBoundary = value;
     _refreshVisiblePolygons();
+    if (value) {
+      final polygon = _firstNonEmptyPolygon(_boundaryPolygons);
+      if (polygon != null) {
+        focusPolygon(polygon, highlight: false);
+      }
+    }
   }
 
   void setShowOtherPolygons(bool value) {
@@ -249,9 +257,16 @@ class GeofenceMapController extends ChangeNotifier {
     }
     _showOtherPolygons = value;
     _refreshVisiblePolygons();
+    if (value) {
+      final polygon = _firstNonEmptyPolygon(_otherPolygons);
+      if (polygon != null) {
+        focusPolygon(polygon, highlight: false);
+      }
+    }
   }
 
   void setSelectedMouzas(Iterable<String> mouzas) {
+    final previousSelection = Set<String>.from(_selectedMouzaNames);
     final filtered = mouzas
         .where((name) => _availableMouzaNames.contains(name))
         .toSet();
@@ -263,6 +278,11 @@ class GeofenceMapController extends ChangeNotifier {
       ..clear()
       ..addAll(filtered);
     _refreshVisiblePolygons();
+
+    final newlySelected = filtered.difference(previousSelection);
+    if (newlySelected.isNotEmpty) {
+      _focusOnMouza(newlySelected.first);
+    }
   }
 
   void selectAllMouzas() {
@@ -318,8 +338,6 @@ class GeofenceMapController extends ChangeNotifier {
   void focusPolygon(PolygonFeature polygon, {bool highlight = true}) {
     if (highlight) {
       highlightPolygon(polygon);
-    } else {
-      highlightPolygon(null);
     }
     final bounds = _boundsForPolygon(polygon);
     if (bounds == null) {
@@ -329,6 +347,10 @@ class GeofenceMapController extends ChangeNotifier {
     moveMap(bounds.center, targetZoom);
   }
 
+  void focusMouza(String mouzaName) {
+    _focusOnMouza(mouzaName);
+  }
+
   PolygonFeature? polygonAt(LatLng point) {
     for (final polygon in _visiblePolygons) {
       if (isPointInsidePolygon(point, polygon)) {
@@ -336,6 +358,32 @@ class GeofenceMapController extends ChangeNotifier {
       }
     }
     return null;
+  }
+
+  void _focusOnMouza(String mouzaName) {
+    final polygon = _findMouzaPolygon(mouzaName);
+    if (polygon != null) {
+      focusPolygon(polygon);
+    }
+  }
+
+  PolygonFeature? _findMouzaPolygon(String mouzaName) {
+    for (final polygon in _mouzaPolygons) {
+      final name = _mouzaNameForPolygon(polygon);
+      if (name != null && name == mouzaName) {
+        return polygon;
+      }
+    }
+    return null;
+  }
+
+  PolygonFeature? _firstNonEmptyPolygon(List<PolygonFeature> polygons) {
+    for (final polygon in polygons) {
+      if (polygon.outer.isNotEmpty) {
+        return polygon;
+      }
+    }
+    return polygons.isNotEmpty ? polygons.first : null;
   }
 
   Future<void> _loadGeoJsonBoundary() async {
@@ -387,7 +435,10 @@ class GeofenceMapController extends ChangeNotifier {
               .where((name) => name.isNotEmpty),
         );
       _selectedMouzaNames
-        ..removeWhere((name) => !_availableMouzaNames.contains(name));
+        ..clear();
+      if (_availableMouzaNames.contains(_defaultMouzaName)) {
+        _selectedMouzaNames.add(_defaultMouzaName);
+      }
 
       _geofencePolygons
         ..clear()
@@ -405,8 +456,15 @@ class GeofenceMapController extends ChangeNotifier {
       final resolvedCenter = centralPolygon != null
           ? polygonCentroid(centralPolygon)
           : center;
-      _primaryPolygon = centralPolygon;
-      _primaryCenter = resolvedCenter ?? center;
+      final defaultPolygon = _findMouzaPolygon(_defaultMouzaName);
+      if (defaultPolygon != null) {
+        _primaryPolygon = defaultPolygon;
+        _primaryCenter =
+            polygonCentroid(defaultPolygon) ?? _boundsForPolygon(defaultPolygon)?.center ?? center;
+      } else {
+        _primaryPolygon = centralPolygon;
+        _primaryCenter = resolvedCenter ?? center;
+      }
       _selectedPolygon = null;
 
       _refreshVisiblePolygons(notify: false);

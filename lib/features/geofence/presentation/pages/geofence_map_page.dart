@@ -139,9 +139,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
         : () => controller.calibrateNow();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('জিওফেন্স মানচিত্র'),
-      ),
+      appBar: null,
       drawer: Drawer(
         child: _MapSidebar(
           controller: controller,
@@ -260,43 +258,30 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
                 padding: const EdgeInsets.all(12),
                 child: Material(
                   elevation: 4,
-                  borderRadius: BorderRadius.circular(16),
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.surfaceVariant.withOpacity(0.9),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Builder(
-                          builder: (context) => IconButton(
-                            tooltip: 'সাইডবার খুলুন',
-                            icon: const Icon(Icons.menu),
-                            onPressed: Scaffold.of(context).openDrawer,
-                            iconSize: 20,
-                            style: IconButton.styleFrom(
-                              padding: EdgeInsets.zero,
-                              minimumSize: const Size(40, 40),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        const Icon(Icons.layers_outlined, size: 18),
-                        const SizedBox(width: 6),
-                        Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: Text(
-                            'লেয়ার: ${_selectedBaseLayer.label}',
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                        ),
-                      ],
+                  shape: const CircleBorder(),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .surfaceVariant
+                      .withOpacity(0.9),
+                  child: Builder(
+                    builder: (context) => IconButton(
+                      tooltip: 'সাইডবার খুলুন',
+                      icon: const Icon(Icons.menu),
+                      onPressed: Scaffold.of(context).openDrawer,
                     ),
                   ),
+                ),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Align(
+              alignment: Alignment.bottomLeft,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: FilledButton(
+                  onPressed: controller.centerOnPrimaryArea,
+                  child: const Text('বালুমহাল'),
                 ),
               ),
             ),
