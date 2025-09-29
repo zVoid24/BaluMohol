@@ -113,9 +113,11 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
               onPressed: isTracking
                   ? () => _toggleTracking(controller)
                   : (controller.permissionDenied
-                      ? null
-                      : () => _toggleTracking(controller)),
-              label: Text(isTracking ? 'ট্র্যাকিং বন্ধ করুন' : 'ট্র্যাকিং শুরু করুন'),
+                        ? null
+                        : () => _toggleTracking(controller)),
+              label: Text(
+                isTracking ? 'ট্র্যাকিং বন্ধ করুন' : 'ট্র্যাকিং শুরু করুন',
+              ),
               icon: Icon(isTracking ? Icons.stop : Icons.play_arrow),
             ),
             const SizedBox(height: 12),
@@ -155,7 +157,9 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                urlTemplate:
+                    'http://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}',
+                subdomains: const ['mt0', 'mt1', 'mt2', 'mt3'],
                 userAgentPackageName: 'com.example.balumohol',
               ),
               if (controller.polygons.isNotEmpty)
@@ -240,9 +244,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
         onTap: () => _showCurrentLocationDetails(controller),
         child: Tooltip(
           message: 'আপনি এখানে আছেন\nসঠিকতা: $accuracyText',
-          child: CurrentLocationIndicator(
-            heading: controller.currentHeading,
-          ),
+          child: CurrentLocationIndicator(heading: controller.currentHeading),
         ),
       ),
     );
@@ -292,14 +294,16 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     if (!mounted) return;
     if (!started) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('বর্তমান অবস্থান না পাওয়া পর্যন্ত অপেক্ষা করুন।')),
+        const SnackBar(
+          content: Text('বর্তমান অবস্থান না পাওয়া পর্যন্ত অপেক্ষা করুন।'),
+        ),
       );
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('🚶 ট্র্যাকিং শুরু হয়েছে।')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('🚶 ট্র্যাকিং শুরু হয়েছে।')));
   }
 
   List<Marker> _buildCustomPlaceMarkers(GeofenceMapController controller) {
