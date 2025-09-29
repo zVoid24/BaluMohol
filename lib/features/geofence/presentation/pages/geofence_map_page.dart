@@ -147,9 +147,8 @@ class _GeofenceMapPageState extends State<GeofenceMapPage>
                 }
 
                 if (event.source == MapEventSource.onDrag ||
-                    event.source == MapEventSource.onMultiFingerGesture ||
-                    event.source == MapEventSource.onScrollWheel ||
-                    event.source == MapEventSource.onDoubleTapZoom) {
+                    event.source == MapEventSource.onMultiFinger ||
+                    event.source == MapEventSource.doubleTap) {
                   if (_cameraController.isAnimating) {
                     _cameraController.stop();
                     _removeCameraAnimationCallbacks();
