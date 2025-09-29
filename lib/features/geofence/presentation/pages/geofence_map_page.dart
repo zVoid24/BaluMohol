@@ -94,8 +94,8 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
       _currentZoom >= _customPlaceMarkerZoomThreshold;
 
   _BaseLayerOption get _selectedBaseLayer => _baseLayerOptions.firstWhere(
-        (option) => option.type == _selectedLayerType,
-      );
+    (option) => option.type == _selectedLayerType,
+  );
 
   @override
   void initState() {
@@ -132,8 +132,8 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
 
     final VoidCallback? trackingCallback =
         isTracking || !controller.permissionDenied
-            ? () => _toggleTracking(controller)
-            : null;
+        ? () => _toggleTracking(controller)
+        : null;
     final VoidCallback? calibrateCallback = controller.permissionDenied
         ? null
         : () => controller.calibrateNow();
@@ -184,107 +184,110 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
           Expanded(
             child: Stack(
               children: [
-          FlutterMap(
-            mapController: controller.mapController,
-            options: MapOptions(
-              initialCenter: controller.fallbackCenter,
-              initialZoom: 15,
-              onTap: (tapPosition, point) async {
-                final polygon = controller.polygonAt(point);
-                if (polygon != null) {
-                  await _showPolygonDetails(controller, polygon);
-                  return;
-                }
-                controller.highlightPolygon(null);
-              },
-              onMapReady: controller.onMapReady,
-              onMapEvent: (event) {
-                final zoom = event.camera.zoom;
-                if ((zoom - _currentZoom).abs() > 0.01) {
-                  setState(() {
-                    _currentZoom = zoom;
-                  });
-                }
-              },
-            ),
-            children: [
-              TileLayer(
-                urlTemplate: _selectedBaseLayer.urlTemplate,
-                subdomains:
-                    _selectedBaseLayer.subdomains ?? const <String>[],
-                userAgentPackageName: 'com.example.balumohol',
-              ),
-              if (controller.polygons.isNotEmpty)
-                PolygonLayer(polygons: _buildPolygons(controller)),
-              if (pathPoints.length >= 2)
-                PolylineLayer(
-                  polylines: [
-                    Polyline(
-                      points: pathPoints,
-                      strokeWidth: 4,
-                      color: Colors.blueAccent.withOpacity(0.8),
-                      borderStrokeWidth: 1.5,
-                      borderColor: Colors.white,
+                FlutterMap(
+                  mapController: controller.mapController,
+                  options: MapOptions(
+                    initialCenter: controller.fallbackCenter,
+                    initialZoom: 15,
+                    onTap: (tapPosition, point) async {
+                      final polygon = controller.polygonAt(point);
+                      if (polygon != null) {
+                        await _showPolygonDetails(controller, polygon);
+                        return;
+                      }
+                      controller.highlightPolygon(null);
+                    },
+                    onMapReady: controller.onMapReady,
+                    onMapEvent: (event) {
+                      final zoom = event.camera.zoom;
+                      if ((zoom - _currentZoom).abs() > 0.01) {
+                        setState(() {
+                          _currentZoom = zoom;
+                        });
+                      }
+                    },
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate: _selectedBaseLayer.urlTemplate,
+                      subdomains:
+                          _selectedBaseLayer.subdomains ?? const <String>[],
+                      userAgentPackageName: 'com.example.balumohol',
                     ),
+                    if (controller.polygons.isNotEmpty)
+                      PolygonLayer(polygons: _buildPolygons(controller)),
+                    if (pathPoints.length >= 2)
+                      PolylineLayer(
+                        polylines: [
+                          Polyline(
+                            points: pathPoints,
+                            strokeWidth: 4,
+                            color: Colors.blueAccent.withOpacity(0.8),
+                            borderStrokeWidth: 1.5,
+                            borderColor: Colors.white,
+                          ),
+                        ],
+                      ),
+                    if (historyMarkers.isNotEmpty)
+                      MarkerLayer(markers: historyMarkers),
+                    if (customPlaceMarkers.isNotEmpty)
+                      MarkerLayer(markers: customPlaceMarkers),
+                    if (currentMarker != null)
+                      MarkerLayer(markers: [currentMarker]),
                   ],
                 ),
-              if (historyMarkers.isNotEmpty)
-                MarkerLayer(markers: historyMarkers),
-              if (customPlaceMarkers.isNotEmpty)
-                MarkerLayer(markers: customPlaceMarkers),
-              if (currentMarker != null) MarkerLayer(markers: [currentMarker]),
-            ],
-          ),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Align(
-                alignment: Alignment.topRight,
-                child: _StatusPanel(
-                  collapsed: _statusPanelCollapsed,
-                  onToggle: () {
-                    setState(() {
-                      _statusPanelCollapsed = !_statusPanelCollapsed;
-                    });
-                  },
-                  accuracyText: accuracyText,
-                  statusMessage: controller.statusMessage,
-                  errorMessage: controller.errorMessage,
-                ),
-              ),
-            ),
-          ),
-          SafeArea(
-            child: Align(
-              alignment: Alignment.topLeft,
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Material(
-                  elevation: 4,
-                  borderRadius: BorderRadius.circular(16),
-                  color: Theme.of(context)
-                      .colorScheme
-                      .surfaceVariant
-                      .withOpacity(0.9),
+                SafeArea(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.layers_outlined, size: 18),
-                        const SizedBox(width: 6),
-                        Text(
-                          'লেয়ার: ${_selectedBaseLayer.label}',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ],
+                    padding: const EdgeInsets.all(12),
+                    child: Align(
+                      alignment: Alignment.topRight,
+                      child: _StatusPanel(
+                        collapsed: _statusPanelCollapsed,
+                        onToggle: () {
+                          setState(() {
+                            _statusPanelCollapsed = !_statusPanelCollapsed;
+                          });
+                        },
+                        accuracyText: accuracyText,
+                        statusMessage: controller.statusMessage,
+                        errorMessage: controller.errorMessage,
+                      ),
                     ),
                   ),
                 ),
-              ),
+                SafeArea(
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Material(
+                        elevation: 4,
+                        borderRadius: BorderRadius.circular(16),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.surfaceVariant.withOpacity(0.9),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.layers_outlined, size: 18),
+                              const SizedBox(width: 6),
+                              Text(
+                                'লেয়ার: ${_selectedBaseLayer.label}',
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -567,8 +570,9 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
       if (updatedPlace != null) {
         await controller.updateCustomPlace(place, updatedPlace);
         if (!mounted) return;
-        final updatedName =
-            updatedPlace.name.isEmpty ? displayName : updatedPlace.name;
+        final updatedName = updatedPlace.name.isEmpty
+            ? displayName
+            : updatedPlace.name;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('📍 "$updatedName" হালনাগাদ হয়েছে।')),
         );
@@ -600,9 +604,11 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
                     value: option.type,
                     groupValue: _selectedLayerType,
                     title: Text(option.label),
-                    subtitle:
-                        option.subtitle != null ? Text(option.subtitle!) : null,
-                    onChanged: (value) => Navigator.of(context).pop(option.type),
+                    subtitle: option.subtitle != null
+                        ? Text(option.subtitle!)
+                        : null,
+                    onChanged: (value) =>
+                        Navigator.of(context).pop(option.type),
                   ),
                 ),
               ],
@@ -809,10 +815,7 @@ class _MapSidebar extends StatelessWidget {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                 children: [
-                  Text(
-                    'লেয়ার দৃশ্যমানতা',
-                    style: theme.textTheme.titleMedium,
-                  ),
+                  Text('লেয়ার দৃশ্যমানতা', style: theme.textTheme.titleMedium),
                   SwitchListTile(
                     value: controller.showBoundary,
                     onChanged: onToggleBoundary,

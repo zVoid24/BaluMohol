@@ -22,6 +22,22 @@ import 'package:balumohol/features/geofence/utils/geo_utils.dart';
 class GeofenceMapController extends ChangeNotifier {
   GeofenceMapController();
 
+  void _refreshVisiblePolygons({bool notify = true}) {
+    _visiblePolygons
+      ..clear()
+      ..addAll([
+        if (_showBoundary) ..._boundaryPolygons,
+        ..._mouzaPolygons.where(
+          (polygon) =>
+              _selectedMouzaNames.contains(_mouzaNameForPolygon(polygon)),
+        ),
+        if (_showOtherPolygons) ..._otherPolygons,
+      ]);
+    if (notify) {
+      _notifySafely();
+    }
+  }
+
   final MapController mapController = MapController();
 
   final List<PolygonFeature> _visiblePolygons = [];
@@ -29,8 +45,9 @@ class GeofenceMapController extends ChangeNotifier {
   final List<PolygonFeature> _boundaryPolygons = [];
   final List<PolygonFeature> _mouzaPolygons = [];
   final List<PolygonFeature> _otherPolygons = [];
-  final SplayTreeSet<String> _availableMouzaNames =
-      SplayTreeSet<String>((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+  final SplayTreeSet<String> _availableMouzaNames = SplayTreeSet<String>(
+    (a, b) => a.toLowerCase().compareTo(b.toLowerCase()),
+  );
   final Set<String> _selectedMouzaNames = <String>{};
   final List<PositionSample> _samples = [];
   final List<LocationHistoryEntry> _history = [];
@@ -86,14 +103,11 @@ class GeofenceMapController extends ChangeNotifier {
   List<PolygonFeature> get polygons => List.unmodifiable(_visiblePolygons);
   List<PolygonFeature> get boundaryPolygons =>
       List.unmodifiable(_boundaryPolygons);
-  List<PolygonFeature> get mouzaPolygons =>
-      List.unmodifiable(_mouzaPolygons);
-  List<PolygonFeature> get otherPolygons =>
-      List.unmodifiable(_otherPolygons);
+  List<PolygonFeature> get mouzaPolygons => List.unmodifiable(_mouzaPolygons);
+  List<PolygonFeature> get otherPolygons => List.unmodifiable(_otherPolygons);
   List<String> get availableMouzaNames =>
       List.unmodifiable(_availableMouzaNames.toList(growable: false));
-  Set<String> get selectedMouzaNames =>
-      Set.unmodifiable(_selectedMouzaNames);
+  Set<String> get selectedMouzaNames => Set.unmodifiable(_selectedMouzaNames);
   List<LocationHistoryEntry> get history => List.unmodifiable(_history);
   List<CustomPlace> get customPlaces => List.unmodifiable(_customPlaces);
   List<LatLng> get trackingPath => List.unmodifiable(_trackingPath);
@@ -326,10 +340,12 @@ class GeofenceMapController extends ChangeNotifier {
 
   Future<void> _loadGeoJsonBoundary() async {
     try {
-      final boundaryRaw = await rootBundle
-          .loadString('assets/Daulatpur_Sheet_Boundary_WGS1984.geojson');
-      final mouzaRaw = await rootBundle
-          .loadString('assets/Daulatpur_Mauza_Digitization_WGS1984.geojson');
+      final boundaryRaw = await rootBundle.loadString(
+        'assets/Daulatpur_Sheet_Boundary_WGS1984.geojson',
+      );
+      final mouzaRaw = await rootBundle.loadString(
+        'assets/Daulatpur_Mauza_Digitization_WGS1984.geojson',
+      );
 
       final Map<String, dynamic> boundaryData =
           json.decode(boundaryRaw) as Map<String, dynamic>;
@@ -387,8 +403,9 @@ class GeofenceMapController extends ChangeNotifier {
       ];
       final center = computeBoundsCenter(combined);
       final centralPolygon = _findCentralPolygon(combined, center);
-      final resolvedCenter =
-          centralPolygon != null ? polygonCentroid(centralPolygon) : center;
+      final resolvedCenter = centralPolygon != null
+          ? polygonCentroid(centralPolygon)
+          : center;
       _primaryPolygon = centralPolygon;
       _primaryCenter = resolvedCenter ?? center;
       _selectedPolygon = null;
@@ -403,10 +420,14 @@ class GeofenceMapController extends ChangeNotifier {
         );
       }
       focusPolygon ??= _primaryPolygon;
-      focusPolygon ??= combined.firstWhere(
-        (polygon) => polygon.outer.isNotEmpty,
-        orElse: () => combined.isNotEmpty ? combined.first : null,
-      );
+      if (focusPolygon == null) {
+        if (combined.isNotEmpty) {
+          focusPolygon = combined.firstWhere(
+            (polygon) => polygon.outer.isNotEmpty,
+            orElse: () => combined.first,
+          );
+        }
+      }
 
       if (focusPolygon != null) {
         final bounds = _boundsForPolygon(focusPolygon);
@@ -483,8 +504,9 @@ class GeofenceMapController extends ChangeNotifier {
   }
 
   Future<void> _persistCustomPlaces() async {
-    final encoded =
-        json.encode(_customPlaces.map((place) => place.toJson()).toList());
+    final encoded = json.encode(
+      _customPlaces.map((place) => place.toJson()).toList(),
+    );
     await _prefs?.setString(customPlacesStorageKey, encoded);
   }
 
@@ -583,8 +605,7 @@ class GeofenceMapController extends ChangeNotifier {
       _history.removeRange(0, _history.length - maxHistoryEntries);
     }
     if (_trackingPath.length > maxHistoryEntries) {
-      _trackingPath
-          .removeRange(0, _trackingPath.length - maxHistoryEntries);
+      _trackingPath.removeRange(0, _trackingPath.length - maxHistoryEntries);
     }
     await _persistHistory();
     _notifySafely();
@@ -603,13 +624,13 @@ class GeofenceMapController extends ChangeNotifier {
 
     _positionSubscription =
         Geolocator.getPositionStream(locationSettings: settings).listen(
-      _handlePosition,
-      onError: (Object error) {
-        _errorMessage = error.toString();
-        _statusMessage = 'অবস্থান পাওয়ার সময় ত্রুটি ঘটেছে।';
-        _notifySafely();
-      },
-    );
+          _handlePosition,
+          onError: (Object error) {
+            _errorMessage = error.toString();
+            _statusMessage = 'অবস্থান পাওয়ার সময় ত্রুটি ঘটেছে।';
+            _notifySafely();
+          },
+        );
   }
 
   Future<bool> _ensurePermission() async {
@@ -637,7 +658,8 @@ class GeofenceMapController extends ChangeNotifier {
     if (permission == LocationPermission.deniedForever) {
       _permissionDenied = true;
       _statusMessage = 'অবস্থান অনুমতি স্থায়ীভাবে প্রত্যাখ্যান করা হয়েছে।';
-      _errorMessage = 'চালিয়ে যেতে সিস্টেম সেটিংস থেকে অবস্থান অনুমতি সক্রিয় করুন।';
+      _errorMessage =
+          'চালিয়ে যেতে সিস্টেম সেটিংস থেকে অবস্থান অনুমতি সক্রিয় করুন।';
       _notifySafely();
       return false;
     }
@@ -726,10 +748,7 @@ class GeofenceMapController extends ChangeNotifier {
         inside = true;
         break;
       }
-      minDistance = math.min(
-        minDistance,
-        distanceToPolygon(position, polygon),
-      );
+      minDistance = math.min(minDistance, distanceToPolygon(position, polygon));
     }
 
     if (inside) {
@@ -757,57 +776,39 @@ class GeofenceMapController extends ChangeNotifier {
   }
 }
 
-  List<PolygonFeature> _withPrefixedIds(
-    List<PolygonFeature> polygons, {
-    required String prefix,
-    String? layerType,
-  }) {
-    final result = <PolygonFeature>[];
-    for (int i = 0; i < polygons.length; i++) {
-      final polygon = polygons[i];
-      final properties = <String, dynamic>{
-        ...polygon.properties,
-        if (layerType != null) 'layer_type': layerType,
-      };
-      result.add(
-        PolygonFeature(
-          id: '${prefix}_$i',
-          outer: polygon.outer,
-          holes: polygon.holes,
-          properties: properties,
-        ),
-      );
-    }
-    return result;
+List<PolygonFeature> _withPrefixedIds(
+  List<PolygonFeature> polygons, {
+  required String prefix,
+  String? layerType,
+}) {
+  final result = <PolygonFeature>[];
+  for (int i = 0; i < polygons.length; i++) {
+    final polygon = polygons[i];
+    final properties = <String, dynamic>{
+      ...polygon.properties,
+      if (layerType != null) 'layer_type': layerType,
+    };
+    result.add(
+      PolygonFeature(
+        id: '${prefix}_$i',
+        outer: polygon.outer,
+        holes: polygon.holes,
+        properties: properties,
+      ),
+    );
   }
+  return result;
+}
 
-  String? _mouzaNameForPolygon(PolygonFeature polygon) {
-    final mouza = polygon.properties['mouza_name'];
-    if (mouza == null) {
-      return null;
-    }
-    return mouza.toString();
+String? _mouzaNameForPolygon(PolygonFeature polygon) {
+  final mouza = polygon.properties['mouza_name'];
+  if (mouza == null) {
+    return null;
   }
+  return mouza.toString();
+}
 
-  void _refreshVisiblePolygons({bool notify = true}) {
-    _visiblePolygons.clear();
-    if (_showBoundary) {
-      _visiblePolygons.addAll(_boundaryPolygons);
-    }
-    for (final polygon in _mouzaPolygons) {
-      final mouzaName = _mouzaNameForPolygon(polygon);
-      if (mouzaName != null && _selectedMouzaNames.contains(mouzaName)) {
-        _visiblePolygons.add(polygon);
-      }
-    }
-    if (_showOtherPolygons) {
-      _visiblePolygons.addAll(_otherPolygons);
-    }
-
-    if (notify) {
-      _notifySafely();
-    }
-  }
+// Removed duplicate GeofenceMapController class definition.
 
 class _PolygonBounds {
   const _PolygonBounds({
@@ -822,6 +823,5 @@ class _PolygonBounds {
   final double minLng;
   final double maxLng;
 
-  LatLng get center =>
-      LatLng((minLat + maxLat) / 2, (minLng + maxLng) / 2);
+  LatLng get center => LatLng((minLat + maxLat) / 2, (minLng + maxLng) / 2);
 }
