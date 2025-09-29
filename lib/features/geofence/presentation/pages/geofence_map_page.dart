@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -23,15 +25,30 @@ class GeofenceMapPage extends StatefulWidget {
   State<GeofenceMapPage> createState() => _GeofenceMapPageState();
 }
 
-class _GeofenceMapPageState extends State<GeofenceMapPage> {
+class _GeofenceMapPageState extends State<GeofenceMapPage>
+    with TickerProviderStateMixin {
   static const double _customPlaceMarkerZoomThreshold = 14;
   static const double _customPlaceMarkerBaseWidth = 160;
   static const double _customPlaceMarkerBaseHeight = 64;
 
   bool _initialised = false;
   double _currentZoom = 15;
+  double _currentRotation = 0;
+  bool _statusCollapsed = false;
   CustomPlace? _selectedCustomPlace;
   final GlobalKey _polygonButtonKey = GlobalKey();
+
+  late final AnimationController _rotationController;
+  late final AnimationController _cameraController;
+  Animation<double>? _rotationAnimation;
+  Animation<double>? _cameraAnimation;
+  VoidCallback? _rotationAnimationListener;
+  VoidCallback? _cameraAnimationListener;
+  AnimationStatusListener? _rotationStatusListener;
+  AnimationStatusListener? _cameraStatusListener;
+  Tween<double>? _latitudeTween;
+  Tween<double>? _longitudeTween;
+  Tween<double>? _zoomTween;
 
   bool get _showCustomPlaceMarkers =>
       _currentZoom >= _customPlaceMarkerZoomThreshold;
@@ -40,6 +57,14 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
   void initState() {
     super.initState();
     _currentZoom = 15;
+    _rotationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 450),
+    );
+    _cameraController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 550),
+    );
   }
 
   @override
@@ -52,6 +77,15 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
         context.read<GeofenceMapController>().initialize();
       });
     }
+  }
+
+  @override
+  void dispose() {
+    _removeRotationAnimationCallbacks();
+    _removeCameraAnimationCallbacks();
+    _rotationController.dispose();
+    _cameraController.dispose();
+    super.dispose();
   }
 
   @override
@@ -70,46 +104,14 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     return Scaffold(
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            FloatingActionButton(
-              heroTag: 'rotate_btn',
-              onPressed: () => controller.resetRotation(),
-              tooltip: 'উত্তরমুখে ঘোরান',
-              child: const Icon(Icons.north),
-            ),
+            _buildQuickActionPanel(context, controller),
             const SizedBox(height: 12),
-            FloatingActionButton(
-              heroTag: 'current_location_btn',
-              onPressed: () => _goToCurrentLocation(controller),
-              tooltip: 'বর্তমান অবস্থানে যান',
-              child: const Icon(Icons.my_location),
-            ),
-            const SizedBox(height: 12),
-            FloatingActionButton.extended(
-              key: _polygonButtonKey,
-              heroTag: 'polygon_btn',
-              onPressed: () => _showPolygonSelector(controller),
-              label: const Text('পলিগন নির্বাচন'),
-              icon: const Icon(Icons.layers),
-            ),
-            const SizedBox(height: 12),
-            FloatingActionButton.extended(
-              heroTag: 'calibrate_btn',
-              onPressed:
-                  controller.permissionDenied ? null : () => controller.calibrateNow(),
-              label: const Text('এখন ক্যালিব্রেট করুন'),
-              icon: const Icon(Icons.compass_calibration),
-            ),
-            const SizedBox(height: 12),
-            FloatingActionButton.extended(
-              heroTag: 'add_place_btn',
-              onPressed: () => _startAddPlaceFlow(controller),
-              label: const Text('Add place'),
-              icon: const Icon(Icons.add_location_alt),
-            ),
+            _buildPrimaryActionPanel(context, controller),
           ],
         ),
       ),
@@ -131,10 +133,35 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
               onMapReady: controller.onMapReady,
               onMapEvent: (event) {
                 final zoom = event.camera.zoom;
+                final rotation = event.camera.rotation;
+                final normalizedRotation = _normalizeRotation(rotation);
+                var shouldUpdate = false;
+
                 if ((zoom - _currentZoom).abs() > 0.01) {
-                  setState(() {
-                    _currentZoom = zoom;
-                  });
+                  _currentZoom = zoom;
+                  shouldUpdate = true;
+                }
+                if ((normalizedRotation - _currentRotation).abs() > 0.001) {
+                  _currentRotation = normalizedRotation;
+                  shouldUpdate = true;
+                }
+
+                if (event.source == MapEventSource.onDrag ||
+                    event.source == MapEventSource.onMultiFingerGesture ||
+                    event.source == MapEventSource.onScrollWheel ||
+                    event.source == MapEventSource.onDoubleTapZoom) {
+                  if (_cameraController.isAnimating) {
+                    _cameraController.stop();
+                    _removeCameraAnimationCallbacks();
+                  }
+                  if (_rotationController.isAnimating) {
+                    _rotationController.stop();
+                    _removeRotationAnimationCallbacks();
+                  }
+                }
+
+                if (shouldUpdate && mounted) {
+                  setState(() {});
                 }
               },
             ),
@@ -157,10 +184,10 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
               padding: const EdgeInsets.all(12),
               child: Align(
                 alignment: Alignment.topLeft,
-                child: StatusCard(
+                child: _buildStatusPanel(
+                  context: context,
                   accuracyText: accuracyText,
-                  statusMessage: controller.statusMessage,
-                  errorMessage: controller.errorMessage,
+                  controller: controller,
                 ),
               ),
             ),
@@ -168,6 +195,406 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
         ],
       ),
     );
+  }
+
+  Widget _buildStatusPanel({
+    required BuildContext context,
+    required String accuracyText,
+    required GeofenceMapController controller,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 320),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+        decoration: BoxDecoration(
+          color: colorScheme.surface.withOpacity(0.94),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 24,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(18),
+                  onTap: _toggleStatusPanel,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 14,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.gps_fixed, color: colorScheme.primary),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'অবস্থান তথ্য',
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                controller.statusMessage,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        _buildAccuracyChip(context, accuracyText),
+                        const SizedBox(width: 4),
+                        AnimatedRotation(
+                          turns: _statusCollapsed ? 0.5 : 0,
+                          duration: const Duration(milliseconds: 200),
+                          child: Icon(
+                            Icons.keyboard_arrow_up,
+                            color: colorScheme.outline,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              AnimatedCrossFade(
+                firstChild: const SizedBox.shrink(),
+                secondChild: Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+                  child: StatusCard(
+                    accuracyText: accuracyText,
+                    statusMessage: controller.statusMessage,
+                    errorMessage: controller.errorMessage,
+                  ),
+                ),
+                crossFadeState: _statusCollapsed
+                    ? CrossFadeState.showFirst
+                    : CrossFadeState.showSecond,
+                duration: const Duration(milliseconds: 250),
+                sizeCurve: Curves.easeInOutCubic,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAccuracyChip(BuildContext context, String accuracyText) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        'সঠিকতা: $accuracyText',
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: colorScheme.onPrimaryContainer,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickActionPanel(
+    BuildContext context,
+    GeofenceMapController controller,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surface.withOpacity(0.94),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 22,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildCircularActionButton(
+              context: context,
+              tooltip: 'উত্তরমুখে ঘোরান',
+              icon: Transform.rotate(
+                angle: -_rotationToRadians(_currentRotation),
+                child: const Icon(Icons.explore),
+              ),
+              onPressed: () => _rotateToNorth(controller),
+            ),
+            const SizedBox(height: 12),
+            _buildCircularActionButton(
+              context: context,
+              tooltip: 'বর্তমান অবস্থানে যান',
+              icon: const Icon(Icons.my_location),
+              onPressed: () => _goToCurrentLocation(controller),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPrimaryActionPanel(
+    BuildContext context,
+    GeofenceMapController controller,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surface.withOpacity(0.94),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 22,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _PanelButton(
+              buttonKey: _polygonButtonKey,
+              label: 'পলিগন নির্বাচন',
+              icon: Icons.layers,
+              onPressed: () => _showPolygonSelector(controller),
+            ),
+            const SizedBox(height: 10),
+            _PanelButton(
+              label: 'এখন ক্যালিব্রেট করুন',
+              icon: Icons.compass_calibration,
+              onPressed:
+                  controller.permissionDenied ? null : () => controller.calibrateNow(),
+              variant: _PanelButtonVariant.tonal,
+            ),
+            const SizedBox(height: 10),
+            _PanelButton(
+              label: 'Add place',
+              icon: Icons.add_location_alt,
+              onPressed: () => _startAddPlaceFlow(controller),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCircularActionButton({
+    required BuildContext context,
+    required String tooltip,
+    required Widget icon,
+    required VoidCallback onPressed,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Material(
+      color: colorScheme.primaryContainer,
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: IconButton(
+        tooltip: tooltip,
+        icon: icon,
+        onPressed: onPressed,
+        color: colorScheme.onPrimaryContainer,
+        constraints: const BoxConstraints.tightFor(width: 48, height: 48),
+      ),
+    );
+  }
+
+  void _toggleStatusPanel() {
+    setState(() {
+      _statusCollapsed = !_statusCollapsed;
+    });
+  }
+
+  void _rotateToNorth(GeofenceMapController controller) {
+    final rotation = controller.mapController.camera.rotation;
+    final fullRotation = rotation.abs() > 2 * math.pi ? 360.0 : 2 * math.pi;
+    final targetRotation = (rotation / fullRotation).roundToDouble() * fullRotation;
+
+    if ((rotation - targetRotation).abs() < 0.001) {
+      controller.resetRotation();
+      return;
+    }
+
+    _rotationController.stop();
+    _removeRotationAnimationCallbacks();
+
+    final distance = (targetRotation - rotation).abs();
+    final durationMs = (320 + (distance / fullRotation) * 280).clamp(320, 650).round();
+    _rotationController.duration = Duration(milliseconds: durationMs);
+
+    _rotationAnimation = Tween<double>(
+      begin: rotation,
+      end: targetRotation,
+    ).animate(
+      CurvedAnimation(
+        parent: _rotationController,
+        curve: Curves.easeOutCubic,
+      ),
+    );
+
+    _rotationAnimationListener = () {
+      if (_rotationAnimation != null) {
+        controller.mapController.rotate(_rotationAnimation!.value);
+      }
+    };
+
+    _rotationStatusListener = (status) {
+      if (status == AnimationStatus.completed || status == AnimationStatus.dismissed) {
+        controller.resetRotation();
+        _removeRotationAnimationCallbacks();
+      }
+    };
+
+    _rotationController
+      ..addListener(_rotationAnimationListener!)
+      ..addStatusListener(_rotationStatusListener!);
+    _rotationController.forward(from: 0);
+  }
+
+  void _animateCameraTo({
+    required GeofenceMapController controller,
+    required LatLng target,
+    double? zoom,
+    Duration? duration,
+  }) {
+    final camera = controller.mapController.camera;
+    final origin = camera.center;
+    final beginZoom = camera.zoom;
+
+    if ((origin.latitude - target.latitude).abs() < 1e-7 &&
+        (origin.longitude - target.longitude).abs() < 1e-7 &&
+        (zoom == null || (zoom - beginZoom).abs() < 0.01)) {
+      controller.moveMap(target, zoom ?? beginZoom);
+      return;
+    }
+
+    final distanceMeters = Distance().as(LengthUnit.Meter, origin, target);
+    final travelFactor = (distanceMeters / 2500).clamp(0.0, 1.0);
+    final computedDuration = duration ??
+        Duration(milliseconds: (420 + travelFactor * 320).round());
+
+    _cameraController.stop();
+    _removeCameraAnimationCallbacks();
+    _cameraController.duration = computedDuration;
+
+    _latitudeTween = Tween<double>(
+      begin: origin.latitude,
+      end: target.latitude,
+    );
+    _longitudeTween = Tween<double>(
+      begin: origin.longitude,
+      end: target.longitude,
+    );
+    _zoomTween = zoom != null ? Tween<double>(begin: beginZoom, end: zoom) : null;
+
+    _cameraAnimation = CurvedAnimation(
+      parent: _cameraController,
+      curve: Curves.easeInOutCubic,
+    );
+
+    _cameraAnimationListener = () {
+      if (_cameraAnimation == null) return;
+      final progress = _cameraAnimation!.value;
+      final latitude = _latitudeTween!.transform(progress);
+      final longitude = _longitudeTween!.transform(progress);
+      final zoomValue = _zoomTween?.transform(progress) ?? beginZoom;
+      controller.mapController.move(LatLng(latitude, longitude), zoomValue);
+    };
+
+    _cameraStatusListener = (status) {
+      if (status == AnimationStatus.completed || status == AnimationStatus.dismissed) {
+        controller.moveMap(target, zoom ?? beginZoom);
+        _removeCameraAnimationCallbacks();
+      }
+    };
+
+    _cameraController
+      ..addListener(_cameraAnimationListener!)
+      ..addStatusListener(_cameraStatusListener!);
+    _cameraController.forward(from: 0);
+  }
+
+  void _removeRotationAnimationCallbacks() {
+    if (_rotationAnimationListener != null) {
+      _rotationController.removeListener(_rotationAnimationListener!);
+      _rotationAnimationListener = null;
+    }
+    if (_rotationStatusListener != null) {
+      _rotationController.removeStatusListener(_rotationStatusListener!);
+      _rotationStatusListener = null;
+    }
+    _rotationAnimation = null;
+  }
+
+  void _removeCameraAnimationCallbacks() {
+    if (_cameraAnimationListener != null) {
+      _cameraController.removeListener(_cameraAnimationListener!);
+      _cameraAnimationListener = null;
+    }
+    if (_cameraStatusListener != null) {
+      _cameraController.removeStatusListener(_cameraStatusListener!);
+      _cameraStatusListener = null;
+    }
+    _cameraAnimation = null;
+    _latitudeTween = null;
+    _longitudeTween = null;
+    _zoomTween = null;
+  }
+
+  double _normalizeRotation(double rotation) {
+    final fullRotation = rotation.abs() > 2 * math.pi ? 360.0 : 2 * math.pi;
+    var normalized = rotation.remainder(fullRotation);
+    final half = fullRotation / 2;
+    if (normalized > half) normalized -= fullRotation;
+    if (normalized < -half) normalized += fullRotation;
+    return normalized;
+  }
+
+  double _rotationToRadians(double rotation) {
+    if (rotation.abs() > 2 * math.pi) {
+      return rotation * math.pi / 180;
+    }
+    return rotation;
   }
 
   List<Polygon> _buildPolygons(GeofenceMapController controller) {
@@ -292,7 +719,11 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
   Future<void> _goToCurrentLocation(GeofenceMapController controller) async {
     final location = controller.currentLocation;
     if (location != null) {
-      controller.moveMap(location, defaultFollowZoom);
+      _animateCameraTo(
+        controller: controller,
+        target: location,
+        zoom: defaultFollowZoom,
+      );
       return;
     }
 
@@ -538,6 +969,53 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
           ],
         );
       },
+    );
+  }
+}
+
+enum _PanelButtonVariant { filled, tonal }
+
+class _PanelButton extends StatelessWidget {
+  const _PanelButton({
+    this.buttonKey,
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+    this.variant = _PanelButtonVariant.filled,
+  });
+
+  final Key? buttonKey;
+  final String label;
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final _PanelButtonVariant variant;
+
+  @override
+  Widget build(BuildContext context) {
+    final buttonStyle = FilledButton.styleFrom(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+    );
+
+    final Widget button = variant == _PanelButtonVariant.tonal
+        ? FilledButton.tonalIcon(
+            key: buttonKey,
+            onPressed: onPressed,
+            style: buttonStyle,
+            icon: Icon(icon),
+            label: Text(label),
+          )
+        : FilledButton.icon(
+            key: buttonKey,
+            onPressed: onPressed,
+            style: buttonStyle,
+            icon: Icon(icon),
+            label: Text(label),
+          );
+
+    return SizedBox(
+      width: 240,
+      child: button,
     );
   }
 }
