@@ -148,8 +148,8 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
           onToggleTracking: trackingCallback,
           onCalibrate: calibrateCallback,
           onShowLayerSelector: _showLayerSelector,
-          onMouzaSelectionChanged:
-              (selection) => controller.setSelectedMouzas(selection),
+          onMouzaSelectionChanged: (selection) =>
+              controller.setSelectedMouzas(selection),
           onSelectAllMouzas: controller.selectAllMouzas,
           onClearMouzas: controller.clearMouzaSelection,
           onToggleBoundary: controller.setShowBoundary,
@@ -174,6 +174,13 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
               onPressed: controller.resetRotation,
               tooltip: 'মানচিত্র উত্তরের দিকে ঘোরান',
               child: const Icon(Icons.explore),
+            ),
+            const SizedBox(height: 12),
+            FloatingActionButton.extended(
+              heroTag: 'navigate_btn',
+              onPressed: controller.centerOnPrimaryArea,
+              icon: const Icon(Icons.layers),
+              label: const Text('বালুমহাল'),
             ),
           ],
         ),
@@ -206,8 +213,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
             children: [
               TileLayer(
                 urlTemplate: _selectedBaseLayer.urlTemplate,
-                subdomains:
-                    _selectedBaseLayer.subdomains ?? const <String>[],
+                subdomains: _selectedBaseLayer.subdomains ?? const <String>[],
                 userAgentPackageName: 'com.example.balumohol',
               ),
               if (controller.polygons.isNotEmpty)
@@ -228,8 +234,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
                 MarkerLayer(markers: historyMarkers),
               if (customPlaceMarkers.isNotEmpty)
                 MarkerLayer(markers: customPlaceMarkers),
-              if (currentMarker != null)
-                MarkerLayer(markers: [currentMarker]),
+              if (currentMarker != null) MarkerLayer(markers: [currentMarker]),
             ],
           ),
           SafeArea(
@@ -259,10 +264,9 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
                 child: Material(
                   elevation: 4,
                   shape: const CircleBorder(),
-                  color: Theme.of(context)
-                      .colorScheme
-                      .surfaceVariant
-                      .withOpacity(0.9),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.surfaceVariant.withOpacity(0.9),
                   child: Builder(
                     builder: (context) => IconButton(
                       tooltip: 'সাইডবার খুলুন',
@@ -270,18 +274,6 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
                       onPressed: Scaffold.of(context).openDrawer,
                     ),
                   ),
-                ),
-              ),
-            ),
-          ),
-          SafeArea(
-            child: Align(
-              alignment: Alignment.bottomLeft,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: FilledButton(
-                  onPressed: controller.centerOnPrimaryArea,
-                  child: const Text('বালুমহাল'),
                 ),
               ),
             ),
@@ -763,7 +755,7 @@ class _MapSidebar extends StatelessWidget {
       FilledButton.icon(
         onPressed: onAddPlace,
         icon: const Icon(Icons.add_location_alt),
-        label: const Text('জায়গা যোগ করুন'),
+        label: const Text('নতুন স্থান যুক্ত করুন'),
       ),
       FilledButton.icon(
         onPressed: onToggleTracking,
@@ -776,7 +768,7 @@ class _MapSidebar extends StatelessWidget {
       FilledButton.tonalIcon(
         onPressed: onCalibrate,
         icon: const Icon(Icons.compass_calibration),
-        label: const Text('এখন ক্যালিব্রেট করুন'),
+        label: const Text('ক্যালিব্রেট করুন'),
       ),
       OutlinedButton.icon(
         onPressed: onShowLayerSelector,
@@ -823,13 +815,13 @@ class _MapSidebar extends StatelessWidget {
                     dense: true,
                     contentPadding: EdgeInsets.zero,
                   ),
-                  SwitchListTile(
-                    value: controller.showOtherPolygons,
-                    onChanged: onToggleOtherPolygons,
-                    title: const Text('অন্যান্য পলিগন দেখান'),
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                  ),
+                  // SwitchListTile(
+                  //   value: controller.showOtherPolygons,
+                  //   onChanged: onToggleOtherPolygons,
+                  //   title: const Text('অন্যান্য পলিগন দেখান'),
+                  //   dense: true,
+                  //   contentPadding: EdgeInsets.zero,
+                  // ),
                   const SizedBox(height: 16),
                   Text(
                     'মৌজা নির্বাচন করুন',

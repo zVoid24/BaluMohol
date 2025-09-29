@@ -30,10 +30,7 @@ class AddPlacePage extends StatefulWidget {
 }
 
 class _AddressSuggestion {
-  const _AddressSuggestion({
-    required this.displayName,
-    required this.location,
-  });
+  const _AddressSuggestion({required this.displayName, required this.location});
 
   final String displayName;
   final LatLng location;
@@ -90,17 +87,22 @@ class _AddPlacePageState extends State<AddPlacePage> {
     super.initState();
     final existingPlace = widget.existingPlace;
     _nameController = TextEditingController(text: existingPlace?.name ?? '');
-    _categoryController =
-        TextEditingController(text: existingPlace?.category ?? '');
-    _addressController =
-        TextEditingController(text: existingPlace?.address ?? '');
-    _locatedWithinController =
-        TextEditingController(text: existingPlace?.locatedWithin ?? '');
+    _categoryController = TextEditingController(
+      text: existingPlace?.category ?? '',
+    );
+    _addressController = TextEditingController(
+      text: existingPlace?.address ?? '',
+    );
+    _locatedWithinController = TextEditingController(
+      text: existingPlace?.locatedWithin ?? '',
+    );
     _phoneController = TextEditingController(text: existingPlace?.phone ?? '');
-    _websiteController =
-        TextEditingController(text: existingPlace?.website ?? '');
-    _descriptionController =
-        TextEditingController(text: existingPlace?.description ?? '');
+    _websiteController = TextEditingController(
+      text: existingPlace?.website ?? '',
+    );
+    _descriptionController = TextEditingController(
+      text: existingPlace?.description ?? '',
+    );
 
     if (existingPlace != null) {
       _selectedLocation = existingPlace.location;
@@ -189,9 +191,12 @@ class _AddPlacePageState extends State<AddPlacePage> {
         'autocomplete': '1',
         'dedupe': '1',
       });
-      final response = await http.get(uri, headers: const {
-        'User-Agent': 'balumohol-app/1.0 (balumohol@example.com)',
-      });
+      final response = await http.get(
+        uri,
+        headers: const {
+          'User-Agent': 'balumohol-app/1.0 (balumohol@example.com)',
+        },
+      );
 
       if (!mounted || requestId != _addressRequestId) {
         return;
@@ -247,9 +252,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
     _isHandlingAddressSelection = true;
     _addressController.value = TextEditingValue(
       text: suggestion.displayName,
-      selection: TextSelection.collapsed(
-        offset: suggestion.displayName.length,
-      ),
+      selection: TextSelection.collapsed(offset: suggestion.displayName.length),
     );
     _isHandlingAddressSelection = false;
 
@@ -266,10 +269,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
       _isReverseGeocoding = false;
     });
 
-    _mapController.move(
-      suggestion.location,
-      _mapController.camera.zoom,
-    );
+    _mapController.move(suggestion.location, _mapController.camera.zoom);
   }
 
   InputDecoration _buildFieldDecoration({
@@ -301,10 +301,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
       border: baseBorder,
       enabledBorder: baseBorder,
       focusedBorder: baseBorder.copyWith(
-        borderSide: BorderSide(
-          color: colorScheme.primary,
-          width: 2,
-        ),
+        borderSide: BorderSide(color: colorScheme.primary, width: 2),
       ),
     );
   }
@@ -344,9 +341,12 @@ class _AddPlacePageState extends State<AddPlacePage> {
         'zoom': '18',
       });
 
-      final response = await http.get(uri, headers: const {
-        'User-Agent': 'balumohol-app/1.0 (balumohol@example.com)',
-      });
+      final response = await http.get(
+        uri,
+        headers: const {
+          'User-Agent': 'balumohol-app/1.0 (balumohol@example.com)',
+        },
+      );
 
       if (!mounted || requestId != _reverseGeocodeRequestId) {
         return;
@@ -420,9 +420,9 @@ class _AddPlacePageState extends State<AddPlacePage> {
                 builder: (context, setModalState) {
                   final matches = placeCategories
                       .where(
-                        (category) => category
-                            .toLowerCase()
-                            .contains(searchQuery.toLowerCase()),
+                        (category) => category.toLowerCase().contains(
+                          searchQuery.toLowerCase(),
+                        ),
                       )
                       .toList();
                   return Column(
@@ -459,20 +459,20 @@ class _AddPlacePageState extends State<AddPlacePage> {
                       const Divider(height: 1),
                       if (matches.isEmpty)
                         const Expanded(
-                          child: Center(
-                            child: Text('No categories found.'),
-                          ),
+                          child: Center(child: Text('No categories found.')),
                         )
                       else
                         Expanded(
                           child: ListView.separated(
                             itemCount: matches.length,
-                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1),
                             itemBuilder: (context, index) {
                               final category = matches[index];
                               return ListTile(
                                 title: Text(category),
-                                onTap: () => Navigator.of(context).pop(category),
+                                onTap: () =>
+                                    Navigator.of(context).pop(category),
                               );
                             },
                           ),
@@ -596,9 +596,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
     final isEditing = widget.existingPlace != null;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(isEditing ? 'Edit place' : 'Add place'),
-      ),
+      appBar: AppBar(title: Text(isEditing ? 'Edit place' : 'Add place')),
       resizeToAvoidBottomInset: true,
       body: SafeArea(
         child: Padding(
@@ -648,7 +646,8 @@ class _AddPlacePageState extends State<AddPlacePage> {
                               children: [
                                 TileLayer(
                                   urlTemplate:
-                                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                      'https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}',
+                                  subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
                                   userAgentPackageName: 'com.example.balumohol',
                                 ),
                                 if (selectedLocation != null)
@@ -724,30 +723,31 @@ class _AddPlacePageState extends State<AddPlacePage> {
                               displayStringForOption: (option) =>
                                   option.displayName,
                               optionsBuilder: (textEditingValue) {
-                                final trimmed =
-                                    textEditingValue.text.trim();
+                                final trimmed = textEditingValue.text.trim();
                                 if (trimmed.length < 3) {
-                                  return const Iterable<_AddressSuggestion>
-                                      .empty();
+                                  return const Iterable<
+                                    _AddressSuggestion
+                                  >.empty();
                                 }
                                 return _addressOptions;
                               },
                               onSelected: _handleAddressSuggestionSelected,
-                              fieldViewBuilder: (
-                                context,
-                                textEditingController,
-                                focusNode,
-                                onFieldSubmitted,
-                              ) {
-                                return TextFormField(
-                                  controller: textEditingController,
-                                  focusNode: focusNode,
-                                  decoration: _buildFieldDecoration(
-                                    label: 'Address (required)',
-                                    hint:
-                                        'Street, village, or house number',
-                                    suffixIcon:
-                                        (_isFetchingAddressOptions ||
+                              fieldViewBuilder:
+                                  (
+                                    context,
+                                    textEditingController,
+                                    focusNode,
+                                    onFieldSubmitted,
+                                  ) {
+                                    return TextFormField(
+                                      controller: textEditingController,
+                                      focusNode: focusNode,
+                                      decoration: _buildFieldDecoration(
+                                        label: 'Address (required)',
+                                        hint:
+                                            'Street, village, or house number',
+                                        suffixIcon:
+                                            (_isFetchingAddressOptions ||
                                                 _isReverseGeocoding)
                                             ? const Padding(
                                                 padding: EdgeInsets.all(12),
@@ -756,61 +756,62 @@ class _AddPlacePageState extends State<AddPlacePage> {
                                                   height: 16,
                                                   child:
                                                       CircularProgressIndicator(
-                                                    strokeWidth: 2,
-                                                  ),
+                                                        strokeWidth: 2,
+                                                      ),
                                                 ),
                                               )
-                                        : const Icon(
-                                            Icons.place_outlined,
-                                          ),
-                                  ),
-                                  textInputAction: TextInputAction.next,
-                                  validator: _validateRequired,
-                                  onChanged: _onAddressQueryChanged,
-                                  onFieldSubmitted: (_) => onFieldSubmitted(),
-                                );
-                              },
+                                            : const Icon(Icons.place_outlined),
+                                      ),
+                                      textInputAction: TextInputAction.next,
+                                      validator: _validateRequired,
+                                      onChanged: _onAddressQueryChanged,
+                                      onFieldSubmitted: (_) =>
+                                          onFieldSubmitted(),
+                                    );
+                                  },
                               optionsViewBuilder:
                                   (context, onSelected, options) {
-                                if (options.isEmpty) {
-                                  return const SizedBox.shrink();
-                                }
+                                    if (options.isEmpty) {
+                                      return const SizedBox.shrink();
+                                    }
 
-                                return Align(
-                                  alignment: Alignment.topLeft,
-                                  child: Material(
-                                    elevation: 6,
-                                    borderRadius: BorderRadius.circular(12),
-                                    clipBehavior: Clip.antiAlias,
-                                    child: SizedBox(
-                                      width: fieldConstraints.maxWidth,
-                                      child: ConstrainedBox(
-                                        constraints: const BoxConstraints(
-                                          maxHeight: 240,
-                                        ),
-                                        child: ListView.separated(
-                                          padding: EdgeInsets.zero,
-                                          itemCount: options.length,
-                                          separatorBuilder: (_, __) =>
-                                              const Divider(height: 1),
-                                          itemBuilder: (context, index) {
-                                            final option =
-                                                options.elementAt(index);
-                                            return ListTile(
-                                              leading: const Icon(
-                                                Icons.place_outlined,
-                                              ),
-                                              title: Text(option.displayName),
-                                              onTap: () =>
-                                                  onSelected(option),
-                                            );
-                                          },
+                                    return Align(
+                                      alignment: Alignment.topLeft,
+                                      child: Material(
+                                        elevation: 6,
+                                        borderRadius: BorderRadius.circular(12),
+                                        clipBehavior: Clip.antiAlias,
+                                        child: SizedBox(
+                                          width: fieldConstraints.maxWidth,
+                                          child: ConstrainedBox(
+                                            constraints: const BoxConstraints(
+                                              maxHeight: 240,
+                                            ),
+                                            child: ListView.separated(
+                                              padding: EdgeInsets.zero,
+                                              itemCount: options.length,
+                                              separatorBuilder: (_, __) =>
+                                                  const Divider(height: 1),
+                                              itemBuilder: (context, index) {
+                                                final option = options
+                                                    .elementAt(index);
+                                                return ListTile(
+                                                  leading: const Icon(
+                                                    Icons.place_outlined,
+                                                  ),
+                                                  title: Text(
+                                                    option.displayName,
+                                                  ),
+                                                  onTap: () =>
+                                                      onSelected(option),
+                                                );
+                                              },
+                                            ),
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  ),
-                                );
-                              },
+                                    );
+                                  },
                             );
                           },
                         ),
@@ -913,8 +914,9 @@ class _AddPlacePageState extends State<AddPlacePage> {
                           child: FilledButton.icon(
                             onPressed: _submit,
                             icon: const Icon(Icons.check_circle),
-                            label:
-                                Text(isEditing ? 'Update place' : 'Save place'),
+                            label: Text(
+                              isEditing ? 'Update place' : 'Save place',
+                            ),
                           ),
                         ),
                       ],
