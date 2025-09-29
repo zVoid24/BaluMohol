@@ -1,7 +1,12 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 class CurrentLocationIndicator extends StatelessWidget {
-  const CurrentLocationIndicator({super.key});
+  const CurrentLocationIndicator({super.key, this.heading});
+
+  /// Heading in degrees (0° = north, increasing clockwise).
+  final double? heading;
 
   @override
   Widget build(BuildContext context) {
@@ -41,6 +46,22 @@ class CurrentLocationIndicator extends StatelessWidget {
             color: Colors.white,
           ),
         ),
+        if (heading != null)
+          Transform.rotate(
+            angle: heading! * math.pi / 180,
+            child: const Icon(
+              Icons.navigation,
+              size: 26,
+              color: Colors.white,
+              shadows: [
+                Shadow(
+                  color: Color(0x33000000),
+                  blurRadius: 6,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }

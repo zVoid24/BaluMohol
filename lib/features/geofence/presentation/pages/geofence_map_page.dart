@@ -62,10 +62,12 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     final customPlaceMarkers = _showCustomPlaceMarkers
         ? _buildCustomPlaceMarkers(controller)
         : <Marker>[];
+    final pathPoints = controller.trackingPath;
     final accuracyValue = controller.currentAccuracy;
     final accuracyText = accuracyValue != null
         ? formatMeters(accuracyValue, fractionDigits: 0)
         : 'অপেক্ষা চলছে...';
+    final bool isTracking = controller.isTracking;
 
     return Scaffold(
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
@@ -103,6 +105,18 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
                   : () => controller.calibrateNow(),
               label: const Text('এখন ক্যালিব্রেট করুন'),
               icon: const Icon(Icons.compass_calibration),
+            ),
+            const SizedBox(height: 12),
+            FloatingActionButton.extended(
+              heroTag: 'tracking_toggle_btn',
+              backgroundColor: isTracking ? Colors.redAccent : null,
+              onPressed: isTracking
+                  ? () => _toggleTracking(controller)
+                  : (controller.permissionDenied
+                      ? null
+                      : () => _toggleTracking(controller)),
+              label: Text(isTracking ? 'ট্র্যাকিং বন্ধ করুন' : 'ট্র্যাকিং শুরু করুন'),
+              icon: Icon(isTracking ? Icons.stop : Icons.play_arrow),
             ),
             const SizedBox(height: 12),
             FloatingActionButton.extended(
@@ -146,6 +160,18 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
               ),
               if (controller.polygons.isNotEmpty)
                 PolygonLayer(polygons: _buildPolygons(controller)),
+              if (pathPoints.length >= 2)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: pathPoints,
+                      strokeWidth: 4,
+                      color: Colors.blueAccent.withOpacity(0.8),
+                      borderStrokeWidth: 1.5,
+                      borderColor: Colors.white,
+                    ),
+                  ],
+                ),
               if (historyMarkers.isNotEmpty)
                 MarkerLayer(markers: historyMarkers),
               if (customPlaceMarkers.isNotEmpty)
@@ -214,7 +240,9 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
         onTap: () => _showCurrentLocationDetails(controller),
         child: Tooltip(
           message: 'আপনি এখানে আছেন\nসঠিকতা: $accuracyText',
-          child: const CurrentLocationIndicator(),
+          child: CurrentLocationIndicator(
+            heading: controller.currentHeading,
+          ),
         ),
       ),
     );
@@ -248,6 +276,30 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
           ),
         )
         .toList();
+  }
+
+  Future<void> _toggleTracking(GeofenceMapController controller) async {
+    if (controller.isTracking) {
+      controller.stopTracking();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ট্র্যাকিং বন্ধ করা হয়েছে।')),
+      );
+      return;
+    }
+
+    final started = await controller.startTracking();
+    if (!mounted) return;
+    if (!started) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('বর্তমান অবস্থান না পাওয়া পর্যন্ত অপেক্ষা করুন।')),
+      );
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('🚶 ট্র্যাকিং শুরু হয়েছে।')),
+    );
   }
 
   List<Marker> _buildCustomPlaceMarkers(GeofenceMapController controller) {
