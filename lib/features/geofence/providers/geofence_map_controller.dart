@@ -34,6 +34,11 @@ class GeofenceMapController extends ChangeNotifier {
         ),
         if (_showOtherPolygons) ..._otherPolygons,
       ]);
+    _geofencePolygons
+      ..clear()
+      ..addAll(
+        _visiblePolygons.where((polygon) => polygon.outer.isNotEmpty),
+      );
     if (notify) {
       _notifySafely();
     }
@@ -806,21 +811,24 @@ class GeofenceMapController extends ChangeNotifier {
       );
     }
 
-    bool inside = false;
+    PolygonFeature? containingPolygon;
     double minDistance = double.infinity;
 
     for (final polygon in _geofencePolygons) {
       if (isPointInsidePolygon(position, polygon)) {
-        inside = true;
+        containingPolygon = polygon;
         break;
       }
       minDistance = math.min(minDistance, distanceToPolygon(position, polygon));
     }
 
-    if (inside) {
-      return const GeofenceResult(
+    if (containingPolygon != null) {
+      final polygonName = _polygonDisplayName(containingPolygon);
+      final locationText =
+          polygonName != null ? '$polygonName এলাকায়' : 'নির্ধারিত এলাকায়';
+      return GeofenceResult(
         inside: true,
-        statusMessage: '✅ আপনি নির্ধারিত এলাকায় আছেন!',
+        statusMessage: '✅ আপনি $locationText আছেন!',
       );
     }
 
@@ -872,6 +880,42 @@ String? _mouzaNameForPolygon(PolygonFeature polygon) {
     return null;
   }
   return mouza.toString();
+}
+
+String? _polygonDisplayName(PolygonFeature polygon) {
+  final properties = polygon.properties;
+
+  String? _stringValue(dynamic value) {
+    if (value == null) return null;
+    final text = value.toString().trim();
+    if (text.isEmpty || text == 'null') {
+      return null;
+    }
+    return text;
+  }
+
+  final displayName = _stringValue(properties['display_name']) ??
+      _stringValue(properties['name']);
+  if (displayName != null) {
+    return displayName;
+  }
+
+  final mouzaName = _stringValue(properties['mouza_name']);
+  if (mouzaName != null) {
+    return mouzaName.replaceAll('_', ' ');
+  }
+
+  final plotNumber = _stringValue(properties['plot_number']);
+  if (plotNumber != null) {
+    return 'প্লট $plotNumber';
+  }
+
+  final layerType = _stringValue(properties['layer_type']);
+  if (layerType != null) {
+    return layerType;
+  }
+
+  return _stringValue(polygon.id);
 }
 
 // Removed duplicate GeofenceMapController class definition.
