@@ -169,6 +169,9 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
             curve: Curves.easeInOut,
             width: _isSidebarCollapsed ? 0 : 320,
             clipBehavior: Clip.hardEdge,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+            ),
             child: IgnorePointer(
               ignoring: _isSidebarCollapsed,
               child: _MapSidebar(
