@@ -41,6 +41,7 @@ class GeofenceMapController extends ChangeNotifier {
   LatLng _fallbackCenter = const LatLng(23.8103, 90.4125);
   LatLng? _pendingCenter;
   double? _pendingZoom;
+  double? _pendingRotation;
   PolygonFeature? _selectedPolygon;
 
   SharedPreferences? _prefs;
@@ -91,6 +92,10 @@ class GeofenceMapController extends ChangeNotifier {
       _pendingCenter = null;
       _pendingZoom = null;
     }
+    if (_pendingRotation != null) {
+      mapController.rotate(_pendingRotation!);
+      _pendingRotation = null;
+    }
   }
 
   void moveMap(LatLng target, double zoom) {
@@ -100,6 +105,14 @@ class GeofenceMapController extends ChangeNotifier {
       return;
     }
     mapController.move(target, zoom);
+  }
+
+  void resetRotation() {
+    if (!_mapReady) {
+      _pendingRotation = 0;
+      return;
+    }
+    mapController.rotate(0);
   }
 
   Future<void> calibrateNow() async {
@@ -136,6 +149,16 @@ class GeofenceMapController extends ChangeNotifier {
   void highlightPolygon(PolygonFeature? polygon) {
     _selectedPolygon = polygon;
     _notifySafely();
+  }
+
+  void focusPolygon(PolygonFeature polygon) {
+    highlightPolygon(polygon);
+    final bounds = _boundsForPolygon(polygon);
+    if (bounds == null) {
+      return;
+    }
+    final targetZoom = _zoomForBounds(bounds);
+    moveMap(bounds.center, targetZoom);
   }
 
   PolygonFeature? polygonAt(LatLng point) {
@@ -216,6 +239,49 @@ class GeofenceMapController extends ChangeNotifier {
     final encoded =
         json.encode(_customPlaces.map((place) => place.toJson()).toList());
     await _prefs?.setString(customPlacesStorageKey, encoded);
+  }
+
+  _PolygonBounds? _boundsForPolygon(PolygonFeature polygon) {
+    if (polygon.outer.isEmpty) {
+      return null;
+    }
+
+    double minLat = polygon.outer.first.latitude;
+    double maxLat = polygon.outer.first.latitude;
+    double minLng = polygon.outer.first.longitude;
+    double maxLng = polygon.outer.first.longitude;
+
+    void updateBounds(LatLng point) {
+      minLat = math.min(minLat, point.latitude);
+      maxLat = math.max(maxLat, point.latitude);
+      minLng = math.min(minLng, point.longitude);
+      maxLng = math.max(maxLng, point.longitude);
+    }
+
+    for (final point in polygon.outer) {
+      updateBounds(point);
+    }
+    for (final hole in polygon.holes) {
+      for (final point in hole) {
+        updateBounds(point);
+      }
+    }
+
+    return _PolygonBounds(
+      minLat: minLat,
+      maxLat: maxLat,
+      minLng: minLng,
+      maxLng: maxLng,
+    );
+  }
+
+  double _zoomForBounds(_PolygonBounds bounds) {
+    final latSpan = (bounds.maxLat - bounds.minLat).abs();
+    final lngSpan = (bounds.maxLng - bounds.minLng).abs();
+    final maxSpan = math.max(latSpan, lngSpan);
+    final paddedSpan = math.max(maxSpan * 1.2, 1e-6);
+    final zoom = math.log(360 / paddedSpan) / math.log(2);
+    return zoom.clamp(5, 18).toDouble();
   }
 
   Future<void> _recordHistoryEntry() async {
@@ -383,4 +449,21 @@ class GeofenceMapController extends ChangeNotifier {
     notifyListeners();
     return true;
   }
+}
+
+class _PolygonBounds {
+  const _PolygonBounds({
+    required this.minLat,
+    required this.maxLat,
+    required this.minLng,
+    required this.maxLng,
+  });
+
+  final double minLat;
+  final double maxLat;
+  final double minLng;
+  final double maxLng;
+
+  LatLng get center =>
+      LatLng((minLat + maxLat) / 2, (minLng + maxLng) / 2);
 }
