@@ -59,8 +59,9 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     final controller = context.watch<GeofenceMapController>();
     final currentMarker = _buildCurrentLocationMarker(controller);
     final historyMarkers = _buildHistoryMarkers(controller);
-    final customPlaceMarkers =
-        _showCustomPlaceMarkers ? _buildCustomPlaceMarkers(controller) : <Marker>[];
+    final customPlaceMarkers = _showCustomPlaceMarkers
+        ? _buildCustomPlaceMarkers(controller)
+        : <Marker>[];
     final accuracyValue = controller.currentAccuracy;
     final accuracyText = accuracyValue != null
         ? formatMeters(accuracyValue, fractionDigits: 0)
@@ -91,14 +92,15 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
               key: _polygonButtonKey,
               heroTag: 'polygon_btn',
               onPressed: () => _showPolygonSelector(controller),
-              label: const Text('পলিগন নির্বাচন'),
+              label: const Text('পলিগন'),
               icon: const Icon(Icons.layers),
             ),
             const SizedBox(height: 12),
             FloatingActionButton.extended(
               heroTag: 'calibrate_btn',
-              onPressed:
-                  controller.permissionDenied ? null : () => controller.calibrateNow(),
+              onPressed: controller.permissionDenied
+                  ? null
+                  : () => controller.calibrateNow(),
               label: const Text('এখন ক্যালিব্রেট করুন'),
               icon: const Icon(Icons.compass_calibration),
             ),
@@ -106,7 +108,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
             FloatingActionButton.extended(
               heroTag: 'add_place_btn',
               onPressed: () => _startAddPlaceFlow(controller),
-              label: const Text('Add place'),
+              label: const Text('জায়গা যোগ করুন'),
               icon: const Icon(Icons.add_location_alt),
             ),
           ],
@@ -177,23 +179,21 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
 
   List<Polygon> _buildPolygons(GeofenceMapController controller) {
     final selectedId = controller.selectedPolygon?.id;
-    return controller.polygons
-        .where((polygon) => polygon.outer.isNotEmpty)
-        .map(
-          (polygon) {
-            final bool isSelected = polygon.id == selectedId;
-            return Polygon(
-              points: polygon.outer,
-              holePointsList: polygon.holes,
-              color: isSelected ? polygonSelectedFillColor : polygonBaseFillColor,
-              borderColor:
-                  isSelected ? polygonSelectedBorderColor : polygonBaseBorderColor,
-              borderStrokeWidth: isSelected ? 3.6 : 2.8,
-              isFilled: true,
-            );
-          },
-        )
-        .toList();
+    return controller.polygons.where((polygon) => polygon.outer.isNotEmpty).map(
+      (polygon) {
+        final bool isSelected = polygon.id == selectedId;
+        return Polygon(
+          points: polygon.outer,
+          holePointsList: polygon.holes,
+          color: isSelected ? polygonSelectedFillColor : polygonBaseFillColor,
+          borderColor: isSelected
+              ? polygonSelectedBorderColor
+              : polygonBaseBorderColor,
+          borderStrokeWidth: isSelected ? 3.6 : 2.8,
+          isFilled: true,
+        );
+      },
+    ).toList();
   }
 
   Marker? _buildCurrentLocationMarker(GeofenceMapController controller) {
@@ -309,89 +309,92 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
 
   Future<void> _showPolygonSelector(GeofenceMapController controller) async {
     final polygons = controller.polygons;
-    if (polygons.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('কোনও পলিগন পাওয়া যায়নি।')),
-      );
-      return;
-    }
+    controller.focusPolygon(polygons[59]);
+    // //print(polygons);
+    // if (polygons.isEmpty) {
+    //   if (!mounted) return;
+    //   ScaffoldMessenger.of(context).showSnackBar(
+    //     const SnackBar(content: Text('কোনও পলিগন পাওয়া যায়নি।')),
+    //   );
+    //   return;
+    // }
 
-    if (polygons.length == 1) {
-      controller.focusPolygon(polygons.first);
-      return;
-    }
+    // if (polygons.length == 1) {
+    //   controller.focusPolygon(polygons.first);
+    //   print(polygons.first);
+    //   return;
+    // }
 
-    final RenderBox? buttonBox =
-        _polygonButtonKey.currentContext?.findRenderObject() as RenderBox?;
-    final OverlayState? overlayState = Overlay.of(context);
-    final RenderBox? overlayBox =
-        overlayState?.context.findRenderObject() as RenderBox?;
+    // final RenderBox? buttonBox =
+    //     _polygonButtonKey.currentContext?.findRenderObject() as RenderBox?;
+    // final OverlayState? overlayState = Overlay.of(context);
+    // final RenderBox? overlayBox =
+    //     overlayState?.context.findRenderObject() as RenderBox?;
 
-    PolygonFeature? selected;
-    if (buttonBox != null && overlayBox != null) {
-      final Offset topLeft = buttonBox.localToGlobal(
-        Offset.zero,
-        ancestor: overlayBox,
-      );
-      final Offset bottomRight = buttonBox.localToGlobal(
-        buttonBox.size.bottomRight(Offset.zero),
-        ancestor: overlayBox,
-      );
-      final position = RelativeRect.fromLTRB(
-        topLeft.dx,
-        topLeft.dy,
-        overlayBox.size.width - bottomRight.dx,
-        overlayBox.size.height - bottomRight.dy,
-      );
+    // PolygonFeature? selected;
+    // if (buttonBox != null && overlayBox != null) {
+    //   final Offset topLeft = buttonBox.localToGlobal(
+    //     Offset.zero,
+    //     ancestor: overlayBox,
+    //   );
+    //   final Offset bottomRight = buttonBox.localToGlobal(
+    //     buttonBox.size.bottomRight(Offset.zero),
+    //     ancestor: overlayBox,
+    //   );
+    //   final position = RelativeRect.fromLTRB(
+    //     topLeft.dx,
+    //     topLeft.dy,
+    //     overlayBox.size.width - bottomRight.dx,
+    //     overlayBox.size.height - bottomRight.dy,
+    //   );
 
-      selected = await showMenu<PolygonFeature>(
-        context: context,
-        position: position,
-        items: polygons
-            .map(
-              (polygon) => PopupMenuItem<PolygonFeature>(
-                value: polygon,
-                child: Text(_polygonDisplayName(polygon)),
-              ),
-            )
-            .toList(),
-      );
+    //   selected = await showMenu<PolygonFeature>(
+    //     context: context,
+    //     position: position,
+    //     items: polygons
+    //         .map(
+    //           (polygon) => PopupMenuItem<PolygonFeature>(
+    //             value: polygon,
+    //             child: Text(_polygonDisplayName(polygon)),
+    //           ),
+    //         )
+    //         .toList(),
+    //   );
 
-      if (selected == null) {
-        return;
-      }
-    } else {
-      selected = await showModalBottomSheet<PolygonFeature>(
-        context: context,
-        showDragHandle: true,
-        builder: (context) {
-          return SafeArea(
-            child: ListView(
-              shrinkWrap: true,
-              children: [
-                const ListTile(
-                  title: Text('একটি পলিগন নির্বাচন করুন'),
-                ),
-                const Divider(height: 0),
-                ...polygons.map(
-                  (polygon) => ListTile(
-                    title: Text(_polygonDisplayName(polygon)),
-                    onTap: () => Navigator.of(context).pop(polygon),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      );
+    //   if (selected == null) {
+    //     return;
+    //   }
+    // } else {
+    //   selected = await showModalBottomSheet<PolygonFeature>(
+    //     context: context,
+    //     showDragHandle: true,
+    //     builder: (context) {
+    //       return SafeArea(
+    //         child: ListView(
+    //           shrinkWrap: true,
+    //           children: [
+    //             const ListTile(
+    //               title: Text('একটি পলিগন নির্বাচন করুন'),
+    //             ),
+    //             const Divider(height: 0),
+    //             ...polygons.map(
+    //               (polygon) => ListTile(
+    //                 title: Text(_polygonDisplayName(polygon)),
+    //                 onTap: () => Navigator.of(context).pop(polygon),
+    //               ),
+    //             ),
+    //           ],
+    //         ),
+    //       );
+    //     },
+    //   );
 
-      if (selected == null) {
-        return;
-      }
-    }
-
-    controller.focusPolygon(selected);
+    //   if (selected == null) {
+    //     return;
+    //   }
+    // }
+    //print(selected.id);
+    // controller.focusPolygon(polygons[59]);
   }
 
   String _polygonDisplayName(PolygonFeature polygon) {
@@ -423,7 +426,8 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     final result = await Navigator.of(context).push<CustomPlace>(
       MaterialPageRoute(
         builder: (context) => AddPlacePage(
-          initialLocation: controller.currentLocation ?? controller.fallbackCenter,
+          initialLocation:
+              controller.currentLocation ?? controller.fallbackCenter,
         ),
       ),
     );
@@ -437,9 +441,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     if (!mounted) return;
     final displayName = result.name.isEmpty ? 'New place' : result.name;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('📍 "$displayName" added to the map.'),
-      ),
+      SnackBar(content: Text('📍 "$displayName" added to the map.')),
     );
   }
 
@@ -505,7 +507,9 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
               Text('সঠিকতা: $accuracyText'),
               Text(insideText),
               const SizedBox(height: 8),
-              Text('সর্বশেষ আপডেট: ${formatTimestampBangla(DateTime.now().millisecondsSinceEpoch)}'),
+              Text(
+                'সর্বশেষ আপডেট: ${formatTimestampBangla(DateTime.now().millisecondsSinceEpoch)}',
+              ),
             ],
           ),
           actions: [
@@ -532,7 +536,9 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
             children: [
               Text('অক্ষাংশ: ${formatCoordinate(entry.latitude)}'),
               Text('দ্রাঘিমাংশ: ${formatCoordinate(entry.longitude)}'),
-              Text('সঠিকতা: ${formatMeters(entry.accuracy, fractionDigits: 1)}'),
+              Text(
+                'সঠিকতা: ${formatMeters(entry.accuracy, fractionDigits: 1)}',
+              ),
               Text('নির্ধারিত সীমানার ভেতরে: ${entry.inside ? 'হ্যাঁ' : 'না'}'),
               Text('সময়: ${formatTimestampBangla(entry.timestampMs)}'),
             ],
@@ -583,15 +589,14 @@ class _StatusPanel extends StatelessWidget {
               child: InkWell(
                 onTap: onToggle,
                 child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        Icons.gps_fixed,
-                        color: theme.colorScheme.primary,
-                      ),
+                      Icon(Icons.gps_fixed, color: theme.colorScheme.primary),
                       const SizedBox(width: 12),
                       Column(
                         mainAxisSize: MainAxisSize.min,
@@ -623,8 +628,10 @@ class _StatusPanel extends StatelessWidget {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 320),
                 child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 16,
+                  ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -655,8 +662,9 @@ class _StatusPanel extends StatelessWidget {
                       const SizedBox(height: 12),
                       Text(
                         'জিপিএস এর অবস্থা',
-                        style: theme.textTheme.titleSmall
-                            ?.copyWith(fontWeight: FontWeight.w600),
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Text('সঠিকতা: $accuracyText'),
@@ -666,8 +674,9 @@ class _StatusPanel extends StatelessWidget {
                         const SizedBox(height: 8),
                         Text(
                           errorMessage!,
-                          style: theme.textTheme.bodyMedium
-                              ?.copyWith(color: Colors.red),
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: Colors.red,
+                          ),
                         ),
                       ],
                     ],
