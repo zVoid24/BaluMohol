@@ -87,7 +87,6 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
   bool _initialised = false;
   double _currentZoom = 15;
   CustomPlace? _selectedCustomPlace;
-  final GlobalKey _polygonButtonKey = GlobalKey();
   bool _statusPanelCollapsed = true;
   _MapLayerType _selectedLayerType = _MapLayerType.hybrid;
 
@@ -131,6 +130,14 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
         : 'অপেক্ষা চলছে...';
     final bool isTracking = controller.isTracking;
 
+    final VoidCallback? trackingCallback =
+        isTracking || !controller.permissionDenied
+            ? () => _toggleTracking(controller)
+            : null;
+    final VoidCallback? calibrateCallback = controller.permissionDenied
+        ? null
+        : () => controller.calibrateNow();
+
     return Scaffold(
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: SafeArea(
@@ -151,56 +158,32 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
               tooltip: 'মানচিত্র উত্তরের দিকে ঘোরান',
               child: const Icon(Icons.explore),
             ),
-            const SizedBox(height: 12),
-            FloatingActionButton.extended(
-              heroTag: 'layer_btn',
-              onPressed: _showLayerSelector,
-              label: const Text('লেয়ার'),
-              icon: const Icon(Icons.layers_outlined),
-            ),
-            const SizedBox(height: 12),
-            FloatingActionButton.extended(
-              key: _polygonButtonKey,
-              heroTag: 'polygon_btn',
-              onPressed: () => _showPolygonSelector(controller),
-              label: const Text('পলিগন'),
-              icon: const Icon(Icons.layers),
-            ),
-            const SizedBox(height: 12),
-            FloatingActionButton.extended(
-              heroTag: 'calibrate_btn',
-              onPressed: controller.permissionDenied
-                  ? null
-                  : () => controller.calibrateNow(),
-              label: const Text('এখন ক্যালিব্রেট করুন'),
-              icon: const Icon(Icons.compass_calibration),
-            ),
-            const SizedBox(height: 12),
-            FloatingActionButton.extended(
-              heroTag: 'tracking_toggle_btn',
-              backgroundColor: isTracking ? Colors.redAccent : null,
-              onPressed: isTracking
-                  ? () => _toggleTracking(controller)
-                  : (controller.permissionDenied
-                        ? null
-                        : () => _toggleTracking(controller)),
-              label: Text(
-                isTracking ? 'ট্র্যাকিং বন্ধ করুন' : 'ট্র্যাকিং শুরু করুন',
-              ),
-              icon: Icon(isTracking ? Icons.stop : Icons.play_arrow),
-            ),
-            const SizedBox(height: 12),
-            FloatingActionButton.extended(
-              heroTag: 'add_place_btn',
-              onPressed: () => _startAddPlaceFlow(controller),
-              label: const Text('জায়গা যোগ করুন'),
-              icon: const Icon(Icons.add_location_alt),
-            ),
           ],
         ),
       ),
-      body: Stack(
+      body: Row(
         children: [
+          SizedBox(
+            width: 320,
+            child: _MapSidebar(
+              controller: controller,
+              isTracking: isTracking,
+              onAddPlace: () => _startAddPlaceFlow(controller),
+              onToggleTracking: trackingCallback,
+              onCalibrate: calibrateCallback,
+              onShowLayerSelector: _showLayerSelector,
+              onMouzaSelectionChanged: (selection) =>
+                  controller.setSelectedMouzas(selection),
+              onSelectAllMouzas: controller.selectAllMouzas,
+              onClearMouzas: controller.clearMouzaSelection,
+              onToggleBoundary: controller.setShowBoundary,
+              onToggleOtherPolygons: controller.setShowOtherPolygons,
+            ),
+          ),
+          const VerticalDivider(width: 1, thickness: 1),
+          Expanded(
+            child: Stack(
+              children: [
           FlutterMap(
             mapController: controller.mapController,
             options: MapOptions(
@@ -463,96 +446,6 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('বর্তমান অবস্থান এখনও পাওয়া যায়নি।')),
     );
-  }
-
-  Future<void> _showPolygonSelector(GeofenceMapController controller) async {
-    final polygons = controller.polygons;
-    controller.focusPolygon(polygons[59], highlight: false);
-    // //print(polygons);
-    // if (polygons.isEmpty) {
-    //   if (!mounted) return;
-    //   ScaffoldMessenger.of(context).showSnackBar(
-    //     const SnackBar(content: Text('কোনও পলিগন পাওয়া যায়নি।')),
-    //   );
-    //   return;
-    // }
-
-    // if (polygons.length == 1) {
-    //   controller.focusPolygon(polygons.first);
-    //   print(polygons.first);
-    //   return;
-    // }
-
-    // final RenderBox? buttonBox =
-    //     _polygonButtonKey.currentContext?.findRenderObject() as RenderBox?;
-    // final OverlayState? overlayState = Overlay.of(context);
-    // final RenderBox? overlayBox =
-    //     overlayState?.context.findRenderObject() as RenderBox?;
-
-    // PolygonFeature? selected;
-    // if (buttonBox != null && overlayBox != null) {
-    //   final Offset topLeft = buttonBox.localToGlobal(
-    //     Offset.zero,
-    //     ancestor: overlayBox,
-    //   );
-    //   final Offset bottomRight = buttonBox.localToGlobal(
-    //     buttonBox.size.bottomRight(Offset.zero),
-    //     ancestor: overlayBox,
-    //   );
-    //   final position = RelativeRect.fromLTRB(
-    //     topLeft.dx,
-    //     topLeft.dy,
-    //     overlayBox.size.width - bottomRight.dx,
-    //     overlayBox.size.height - bottomRight.dy,
-    //   );
-
-    //   selected = await showMenu<PolygonFeature>(
-    //     context: context,
-    //     position: position,
-    //     items: polygons
-    //         .map(
-    //           (polygon) => PopupMenuItem<PolygonFeature>(
-    //             value: polygon,
-    //             child: Text(_polygonDisplayName(polygon)),
-    //           ),
-    //         )
-    //         .toList(),
-    //   );
-
-    //   if (selected == null) {
-    //     return;
-    //   }
-    // } else {
-    //   selected = await showModalBottomSheet<PolygonFeature>(
-    //     context: context,
-    //     showDragHandle: true,
-    //     builder: (context) {
-    //       return SafeArea(
-    //         child: ListView(
-    //           shrinkWrap: true,
-    //           children: [
-    //             const ListTile(
-    //               title: Text('একটি পলিগন নির্বাচন করুন'),
-    //             ),
-    //             const Divider(height: 0),
-    //             ...polygons.map(
-    //               (polygon) => ListTile(
-    //                 title: Text(_polygonDisplayName(polygon)),
-    //                 onTap: () => Navigator.of(context).pop(polygon),
-    //               ),
-    //             ),
-    //           ],
-    //         ),
-    //       );
-    //     },
-    //   );
-
-    //   if (selected == null) {
-    //     return;
-    //   }
-    // }
-    //print(selected.id);
-    // controller.focusPolygon(polygons[59]);
   }
 
   String _polygonDisplayName(PolygonFeature polygon) {
@@ -825,6 +718,175 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
         );
       },
     );
+  }
+}
+
+class _MapSidebar extends StatelessWidget {
+  const _MapSidebar({
+    required this.controller,
+    required this.isTracking,
+    required this.onAddPlace,
+    required this.onToggleTracking,
+    required this.onCalibrate,
+    required this.onShowLayerSelector,
+    required this.onMouzaSelectionChanged,
+    required this.onSelectAllMouzas,
+    required this.onClearMouzas,
+    required this.onToggleBoundary,
+    required this.onToggleOtherPolygons,
+  });
+
+  final GeofenceMapController controller;
+  final bool isTracking;
+  final VoidCallback onAddPlace;
+  final VoidCallback? onToggleTracking;
+  final VoidCallback? onCalibrate;
+  final VoidCallback onShowLayerSelector;
+  final ValueChanged<Set<String>> onMouzaSelectionChanged;
+  final VoidCallback onSelectAllMouzas;
+  final VoidCallback onClearMouzas;
+  final ValueChanged<bool> onToggleBoundary;
+  final ValueChanged<bool> onToggleOtherPolygons;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final mouzas = controller.availableMouzaNames;
+    final selectedMouzas = controller.selectedMouzaNames;
+    final controls = <Widget>[
+      FilledButton.icon(
+        onPressed: onAddPlace,
+        icon: const Icon(Icons.add_location_alt),
+        label: const Text('জায়গা যোগ করুন'),
+      ),
+      FilledButton.icon(
+        onPressed: onToggleTracking,
+        icon: Icon(isTracking ? Icons.stop : Icons.play_arrow),
+        label: Text(isTracking ? 'ট্র্যাকিং বন্ধ করুন' : 'ট্র্যাকিং শুরু করুন'),
+        style: FilledButton.styleFrom(
+          backgroundColor: isTracking ? Colors.redAccent : null,
+        ),
+      ),
+      FilledButton.tonalIcon(
+        onPressed: onCalibrate,
+        icon: const Icon(Icons.compass_calibration),
+        label: const Text('এখন ক্যালিব্রেট করুন'),
+      ),
+      OutlinedButton.icon(
+        onPressed: onShowLayerSelector,
+        icon: const Icon(Icons.layers_outlined),
+        label: const Text('লেয়ার নির্বাচন করুন'),
+      ),
+    ];
+
+    return Material(
+      elevation: 4,
+      color: theme.colorScheme.surfaceVariant.withOpacity(0.95),
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'মানচিত্র নিয়ন্ত্রণ',
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 12),
+                  for (int i = 0; i < controls.length; i++) ...[
+                    if (i != 0) const SizedBox(height: 8),
+                    controls[i],
+                  ],
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                children: [
+                  Text(
+                    'লেয়ার দৃশ্যমানতা',
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  SwitchListTile(
+                    value: controller.showBoundary,
+                    onChanged: onToggleBoundary,
+                    title: const Text('শীট বাউন্ডারি দেখান'),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  SwitchListTile(
+                    value: controller.showOtherPolygons,
+                    onChanged: onToggleOtherPolygons,
+                    title: const Text('অন্যান্য পলিগন দেখান'),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'মৌজা নির্বাচন করুন',
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  if (mouzas.isEmpty)
+                    const Text('কোনও মৌজা তথ্য পাওয়া যায়নি।')
+                  else ...[
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: selectedMouzas.length == mouzas.length
+                              ? null
+                              : onSelectAllMouzas,
+                          icon: const Icon(Icons.select_all),
+                          label: const Text('সব নির্বাচন করুন'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: selectedMouzas.isEmpty
+                              ? null
+                              : onClearMouzas,
+                          icon: const Icon(Icons.clear_all),
+                          label: const Text('সব অপসারণ করুন'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    ...mouzas.map(
+                      (mouza) => CheckboxListTile(
+                        value: selectedMouzas.contains(mouza),
+                        title: Text(_formatMouzaName(mouza)),
+                        dense: true,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        contentPadding: EdgeInsets.zero,
+                        onChanged: (checked) {
+                          final next = selectedMouzas.toSet();
+                          if (checked ?? false) {
+                            next.add(mouza);
+                          } else {
+                            next.remove(mouza);
+                          }
+                          onMouzaSelectionChanged(next);
+                        },
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatMouzaName(String value) {
+    return value.replaceAll('_', ' ');
   }
 }
 
