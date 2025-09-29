@@ -179,8 +179,12 @@ class GeofenceMapController extends ChangeNotifier {
     _notifySafely();
   }
 
-  void focusPolygon(PolygonFeature polygon) {
-    highlightPolygon(polygon);
+  void focusPolygon(PolygonFeature polygon, {bool highlight = true}) {
+    if (highlight) {
+      highlightPolygon(polygon);
+    } else {
+      highlightPolygon(null);
+    }
     final bounds = _boundsForPolygon(polygon);
     if (bounds == null) {
       return;
