@@ -89,6 +89,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
   CustomPlace? _selectedCustomPlace;
   bool _statusPanelCollapsed = true;
   _MapLayerType _selectedLayerType = _MapLayerType.hybrid;
+  bool _isSidebarCollapsed = false;
 
   bool get _showCustomPlaceMarkers =>
       _currentZoom >= _customPlaceMarkerZoomThreshold;
@@ -163,24 +164,31 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
       ),
       body: Row(
         children: [
-          SizedBox(
-            width: 320,
-            child: _MapSidebar(
-              controller: controller,
-              isTracking: isTracking,
-              onAddPlace: () => _startAddPlaceFlow(controller),
-              onToggleTracking: trackingCallback,
-              onCalibrate: calibrateCallback,
-              onShowLayerSelector: _showLayerSelector,
-              onMouzaSelectionChanged: (selection) =>
-                  controller.setSelectedMouzas(selection),
-              onSelectAllMouzas: controller.selectAllMouzas,
-              onClearMouzas: controller.clearMouzaSelection,
-              onToggleBoundary: controller.setShowBoundary,
-              onToggleOtherPolygons: controller.setShowOtherPolygons,
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeInOut,
+            width: _isSidebarCollapsed ? 0 : 320,
+            clipBehavior: Clip.hardEdge,
+            child: IgnorePointer(
+              ignoring: _isSidebarCollapsed,
+              child: _MapSidebar(
+                controller: controller,
+                isTracking: isTracking,
+                onAddPlace: () => _startAddPlaceFlow(controller),
+                onToggleTracking: trackingCallback,
+                onCalibrate: calibrateCallback,
+                onShowLayerSelector: _showLayerSelector,
+                onMouzaSelectionChanged: (selection) =>
+                    controller.setSelectedMouzas(selection),
+                onSelectAllMouzas: controller.selectAllMouzas,
+                onClearMouzas: controller.clearMouzaSelection,
+                onToggleBoundary: controller.setShowBoundary,
+                onToggleOtherPolygons: controller.setShowOtherPolygons,
+              ),
             ),
           ),
-          const VerticalDivider(width: 1, thickness: 1),
+          if (!_isSidebarCollapsed)
+            const VerticalDivider(width: 1, thickness: 1),
           Expanded(
             child: Stack(
               children: [
@@ -268,17 +276,41 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
                         ).colorScheme.surfaceVariant.withOpacity(0.9),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
+                            horizontal: 8,
+                            vertical: 4,
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              IconButton(
+                                tooltip: _isSidebarCollapsed
+                                    ? 'সাইডবার খুলুন'
+                                    : 'সাইডবার লুকান',
+                                icon: Icon(
+                                  _isSidebarCollapsed
+                                      ? Icons.menu
+                                      : Icons.menu_open,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _isSidebarCollapsed = !_isSidebarCollapsed;
+                                  });
+                                },
+                                iconSize: 20,
+                                style: IconButton.styleFrom(
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: const Size(40, 40),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
                               const Icon(Icons.layers_outlined, size: 18),
                               const SizedBox(width: 6),
-                              Text(
-                                'লেয়ার: ${_selectedBaseLayer.label}',
-                                style: Theme.of(context).textTheme.bodyMedium,
+                              Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: Text(
+                                  'লেয়ার: ${_selectedBaseLayer.label}',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
                               ),
                             ],
                           ),
@@ -586,32 +618,36 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
       context: context,
       showDragHandle: true,
       builder: (context) {
+        final maxHeight = MediaQuery.of(context).size.height * 0.7;
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const ListTile(
-                  title: Text(
-                    'একটি লেয়ার নির্বাচন করুন',
-                    style: TextStyle(fontWeight: FontWeight.w600),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: maxHeight),
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  const ListTile(
+                    title: Text(
+                      'একটি লেয়ার নির্বাচন করুন',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
                   ),
-                ),
-                const Divider(height: 0),
-                ..._baseLayerOptions.map(
-                  (option) => RadioListTile<_MapLayerType>(
-                    value: option.type,
-                    groupValue: _selectedLayerType,
-                    title: Text(option.label),
-                    subtitle: option.subtitle != null
-                        ? Text(option.subtitle!)
-                        : null,
-                    onChanged: (value) =>
-                        Navigator.of(context).pop(option.type),
+                  const Divider(height: 0),
+                  ..._baseLayerOptions.map(
+                    (option) => RadioListTile<_MapLayerType>(
+                      value: option.type,
+                      groupValue: _selectedLayerType,
+                      title: Text(option.label),
+                      subtitle: option.subtitle != null
+                          ? Text(option.subtitle!)
+                          : null,
+                      onChanged: (value) =>
+                          Navigator.of(context).pop(option.type),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );
