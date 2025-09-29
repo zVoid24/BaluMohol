@@ -89,7 +89,6 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
   CustomPlace? _selectedCustomPlace;
   bool _statusPanelCollapsed = true;
   _MapLayerType _selectedLayerType = _MapLayerType.hybrid;
-  bool _isSidebarCollapsed = false;
 
   bool get _showCustomPlaceMarkers =>
       _currentZoom >= _customPlaceMarkerZoomThreshold;
@@ -140,6 +139,25 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
         : () => controller.calibrateNow();
 
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('জিওফেন্স মানচিত্র'),
+      ),
+      drawer: Drawer(
+        child: _MapSidebar(
+          controller: controller,
+          isTracking: isTracking,
+          onAddPlace: () => _startAddPlaceFlow(controller),
+          onToggleTracking: trackingCallback,
+          onCalibrate: calibrateCallback,
+          onShowLayerSelector: _showLayerSelector,
+          onMouzaSelectionChanged:
+              (selection) => controller.setSelectedMouzas(selection),
+          onSelectAllMouzas: controller.selectAllMouzas,
+          onClearMouzas: controller.clearMouzaSelection,
+          onToggleBoundary: controller.setShowBoundary,
+          onToggleOtherPolygons: controller.setShowOtherPolygons,
+        ),
+      ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: SafeArea(
         child: Column(
@@ -162,159 +180,125 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
           ],
         ),
       ),
-      body: Row(
+      body: Stack(
         children: [
-          if (!_isSidebarCollapsed) ...[
-            SizedBox(
-              width: 320,
-              child: _MapSidebar(
-                controller: controller,
-                isTracking: isTracking,
-                onAddPlace: () => _startAddPlaceFlow(controller),
-                onToggleTracking: trackingCallback,
-                onCalibrate: calibrateCallback,
-                onShowLayerSelector: _showLayerSelector,
-                onMouzaSelectionChanged: (selection) =>
-                    controller.setSelectedMouzas(selection),
-                onSelectAllMouzas: controller.selectAllMouzas,
-                onClearMouzas: controller.clearMouzaSelection,
-                onToggleBoundary: controller.setShowBoundary,
-                onToggleOtherPolygons: controller.setShowOtherPolygons,
-              ),
+          FlutterMap(
+            mapController: controller.mapController,
+            options: MapOptions(
+              initialCenter: controller.fallbackCenter,
+              initialZoom: 15,
+              onTap: (tapPosition, point) async {
+                final polygon = controller.polygonAt(point);
+                if (polygon != null) {
+                  await _showPolygonDetails(controller, polygon);
+                  return;
+                }
+                controller.highlightPolygon(null);
+              },
+              onMapReady: controller.onMapReady,
+              onMapEvent: (event) {
+                final zoom = event.camera.zoom;
+                if ((zoom - _currentZoom).abs() > 0.01) {
+                  setState(() {
+                    _currentZoom = zoom;
+                  });
+                }
+              },
             ),
-            const VerticalDivider(width: 1, thickness: 1),
-          ],
-          Expanded(
-            child: Stack(
-              children: [
-                FlutterMap(
-                  mapController: controller.mapController,
-                  options: MapOptions(
-                    initialCenter: controller.fallbackCenter,
-                    initialZoom: 15,
-                    onTap: (tapPosition, point) async {
-                      final polygon = controller.polygonAt(point);
-                      if (polygon != null) {
-                        await _showPolygonDetails(controller, polygon);
-                        return;
-                      }
-                      controller.highlightPolygon(null);
-                    },
-                    onMapReady: controller.onMapReady,
-                    onMapEvent: (event) {
-                      final zoom = event.camera.zoom;
-                      if ((zoom - _currentZoom).abs() > 0.01) {
-                        setState(() {
-                          _currentZoom = zoom;
-                        });
-                      }
-                    },
-                  ),
-                  children: [
-                    TileLayer(
-                      urlTemplate: _selectedBaseLayer.urlTemplate,
-                      subdomains:
-                          _selectedBaseLayer.subdomains ?? const <String>[],
-                      userAgentPackageName: 'com.example.balumohol',
+            children: [
+              TileLayer(
+                urlTemplate: _selectedBaseLayer.urlTemplate,
+                subdomains:
+                    _selectedBaseLayer.subdomains ?? const <String>[],
+                userAgentPackageName: 'com.example.balumohol',
+              ),
+              if (controller.polygons.isNotEmpty)
+                PolygonLayer(polygons: _buildPolygons(controller)),
+              if (pathPoints.length >= 2)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: pathPoints,
+                      strokeWidth: 4,
+                      color: Colors.blueAccent.withOpacity(0.8),
+                      borderStrokeWidth: 1.5,
+                      borderColor: Colors.white,
                     ),
-                    if (controller.polygons.isNotEmpty)
-                      PolygonLayer(polygons: _buildPolygons(controller)),
-                    if (pathPoints.length >= 2)
-                      PolylineLayer(
-                        polylines: [
-                          Polyline(
-                            points: pathPoints,
-                            strokeWidth: 4,
-                            color: Colors.blueAccent.withOpacity(0.8),
-                            borderStrokeWidth: 1.5,
-                            borderColor: Colors.white,
-                          ),
-                        ],
-                      ),
-                    if (historyMarkers.isNotEmpty)
-                      MarkerLayer(markers: historyMarkers),
-                    if (customPlaceMarkers.isNotEmpty)
-                      MarkerLayer(markers: customPlaceMarkers),
-                    if (currentMarker != null)
-                      MarkerLayer(markers: [currentMarker]),
                   ],
                 ),
-                SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Align(
-                      alignment: Alignment.topRight,
-                      child: _StatusPanel(
-                        collapsed: _statusPanelCollapsed,
-                        onToggle: () {
-                          setState(() {
-                            _statusPanelCollapsed = !_statusPanelCollapsed;
-                          });
-                        },
-                        accuracyText: accuracyText,
-                        statusMessage: controller.statusMessage,
-                        errorMessage: controller.errorMessage,
-                      ),
-                    ),
-                  ),
+              if (historyMarkers.isNotEmpty)
+                MarkerLayer(markers: historyMarkers),
+              if (customPlaceMarkers.isNotEmpty)
+                MarkerLayer(markers: customPlaceMarkers),
+              if (currentMarker != null)
+                MarkerLayer(markers: [currentMarker]),
+            ],
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Align(
+                alignment: Alignment.topRight,
+                child: _StatusPanel(
+                  collapsed: _statusPanelCollapsed,
+                  onToggle: () {
+                    setState(() {
+                      _statusPanelCollapsed = !_statusPanelCollapsed;
+                    });
+                  },
+                  accuracyText: accuracyText,
+                  statusMessage: controller.statusMessage,
+                  errorMessage: controller.errorMessage,
                 ),
-                SafeArea(
-                  child: Align(
-                    alignment: Alignment.topLeft,
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Material(
-                        elevation: 4,
-                        borderRadius: BorderRadius.circular(16),
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.surfaceVariant.withOpacity(0.9),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                tooltip: _isSidebarCollapsed
-                                    ? 'সাইডবার খুলুন'
-                                    : 'সাইডবার লুকান',
-                                icon: Icon(
-                                  _isSidebarCollapsed
-                                      ? Icons.menu
-                                      : Icons.menu_open,
-                                ),
-                                onPressed: () {
-                                  setState(() {
-                                    _isSidebarCollapsed = !_isSidebarCollapsed;
-                                  });
-                                },
-                                iconSize: 20,
-                                style: IconButton.styleFrom(
-                                  padding: EdgeInsets.zero,
-                                  minimumSize: const Size(40, 40),
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              const Icon(Icons.layers_outlined, size: 18),
-                              const SizedBox(width: 6),
-                              Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: Text(
-                                  'লেয়ার: ${_selectedBaseLayer.label}',
-                                  style: Theme.of(context).textTheme.bodyMedium,
-                                ),
-                              ),
-                            ],
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Material(
+                  elevation: 4,
+                  borderRadius: BorderRadius.circular(16),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.surfaceVariant.withOpacity(0.9),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Builder(
+                          builder: (context) => IconButton(
+                            tooltip: 'সাইডবার খুলুন',
+                            icon: const Icon(Icons.menu),
+                            onPressed: Scaffold.of(context).openDrawer,
+                            iconSize: 20,
+                            style: IconButton.styleFrom(
+                              padding: EdgeInsets.zero,
+                              minimumSize: const Size(40, 40),
+                            ),
                           ),
                         ),
-                      ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.layers_outlined, size: 18),
+                        const SizedBox(width: 6),
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: Text(
+                            'লেয়ার: ${_selectedBaseLayer.label}',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         ],
