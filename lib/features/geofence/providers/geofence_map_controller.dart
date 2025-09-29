@@ -22,12 +22,11 @@ import 'package:balumohol/features/geofence/utils/geo_utils.dart';
 class GeofenceMapController extends ChangeNotifier {
   GeofenceMapController();
 
-  static const String _defaultMouzaName = '40_RAHATPUR_1';
-
   void _refreshVisiblePolygons({bool notify = true}) {
     _visiblePolygons
       ..clear()
       ..addAll([
+        ..._outputPolygons,
         if (_showBoundary) ..._boundaryPolygons,
         ..._mouzaPolygons.where(
           (polygon) =>
@@ -44,6 +43,7 @@ class GeofenceMapController extends ChangeNotifier {
 
   final List<PolygonFeature> _visiblePolygons = [];
   final List<PolygonFeature> _geofencePolygons = [];
+  final List<PolygonFeature> _outputPolygons = [];
   final List<PolygonFeature> _boundaryPolygons = [];
   final List<PolygonFeature> _mouzaPolygons = [];
   final List<PolygonFeature> _otherPolygons = [];
@@ -159,11 +159,7 @@ class GeofenceMapController extends ChangeNotifier {
   }
 
   void centerOnPrimaryArea() {
-    if (_primaryPolygon != null) {
-      highlightPolygon(_primaryPolygon);
-    } else {
-      highlightPolygon(null);
-    }
+    highlightPolygon(null);
 
     final targetPolygon = _primaryPolygon;
     if (targetPolygon != null) {
@@ -348,7 +344,7 @@ class GeofenceMapController extends ChangeNotifier {
   }
 
   void focusMouza(String mouzaName) {
-    _focusOnMouza(mouzaName);
+    _focusOnMouza(mouzaName, highlight: false);
   }
 
   PolygonFeature? polygonAt(LatLng point) {
@@ -360,10 +356,10 @@ class GeofenceMapController extends ChangeNotifier {
     return null;
   }
 
-  void _focusOnMouza(String mouzaName) {
+  void _focusOnMouza(String mouzaName, {bool highlight = false}) {
     final polygon = _findMouzaPolygon(mouzaName);
     if (polygon != null) {
-      focusPolygon(polygon);
+      focusPolygon(polygon, highlight: highlight);
     }
   }
 
@@ -400,6 +396,13 @@ class GeofenceMapController extends ChangeNotifier {
       final Map<String, dynamic> mouzaData =
           json.decode(mouzaRaw) as Map<String, dynamic>;
 
+      final outputRaw = await rootBundle.loadString(
+        'assets/output.geojson',
+      );
+
+      final Map<String, dynamic> outputData =
+          json.decode(outputRaw) as Map<String, dynamic>;
+
       final boundaryPolygons = _withPrefixedIds(
         parsePolygons(boundaryData),
         prefix: 'boundary',
@@ -410,6 +413,16 @@ class GeofenceMapController extends ChangeNotifier {
         prefix: 'mouza',
         layerType: 'mouza',
       );
+
+      final outputPolygons = _withPrefixedIds(
+        parsePolygons(outputData),
+        prefix: 'output',
+        layerType: 'output',
+      );
+
+      _outputPolygons
+        ..clear()
+        ..addAll(outputPolygons.where((polygon) => polygon.outer.isNotEmpty));
 
       _boundaryPolygons
         ..clear()
@@ -434,19 +447,14 @@ class GeofenceMapController extends ChangeNotifier {
               .whereType<String>()
               .where((name) => name.isNotEmpty),
         );
-      _selectedMouzaNames
-        ..clear();
-      if (_availableMouzaNames.contains(_defaultMouzaName)) {
-        _selectedMouzaNames.add(_defaultMouzaName);
-      }
+      _selectedMouzaNames.clear();
 
       _geofencePolygons
         ..clear()
-        ..addAll(_boundaryPolygons)
-        ..addAll(_mouzaPolygons)
-        ..addAll(_otherPolygons);
+        ..addAll(_outputPolygons);
 
       final combined = <PolygonFeature>[
+        ..._outputPolygons,
         ..._boundaryPolygons,
         ..._mouzaPolygons,
         ..._otherPolygons,
@@ -456,11 +464,12 @@ class GeofenceMapController extends ChangeNotifier {
       final resolvedCenter = centralPolygon != null
           ? polygonCentroid(centralPolygon)
           : center;
-      final defaultPolygon = _findMouzaPolygon(_defaultMouzaName);
-      if (defaultPolygon != null) {
-        _primaryPolygon = defaultPolygon;
-        _primaryCenter =
-            polygonCentroid(defaultPolygon) ?? _boundsForPolygon(defaultPolygon)?.center ?? center;
+      final outputPrimary = _firstNonEmptyPolygon(_outputPolygons);
+      if (outputPrimary != null) {
+        _primaryPolygon = outputPrimary;
+        _primaryCenter = polygonCentroid(outputPrimary) ??
+            _boundsForPolygon(outputPrimary)?.center ??
+            center;
       } else {
         _primaryPolygon = centralPolygon;
         _primaryCenter = resolvedCenter ?? center;
