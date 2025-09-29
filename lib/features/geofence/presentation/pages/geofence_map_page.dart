@@ -31,7 +31,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
   double _currentZoom = 15;
   CustomPlace? _selectedCustomPlace;
   final GlobalKey _polygonButtonKey = GlobalKey();
-  bool _statusPanelCollapsed = false;
+  bool _statusPanelCollapsed = true;
 
   bool get _showCustomPlaceMarkers =>
       _currentZoom >= _customPlaceMarkerZoomThreshold;
@@ -61,8 +61,6 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     final historyMarkers = _buildHistoryMarkers(controller);
     final customPlaceMarkers =
         _showCustomPlaceMarkers ? _buildCustomPlaceMarkers(controller) : <Marker>[];
-    final dissolvedPolygon = controller.dissolvedPolygon;
-
     final accuracyValue = controller.currentAccuracy;
     final accuracyText = accuracyValue != null
         ? formatMeters(accuracyValue, fractionDigits: 0)
@@ -144,10 +142,6 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.example.balumohol',
               ),
-              if (dissolvedPolygon != null)
-                PolygonLayer(
-                  polygons: _buildDissolvedPolygon(dissolvedPolygon),
-                ),
               if (controller.polygons.isNotEmpty)
                 PolygonLayer(polygons: _buildPolygons(controller)),
               if (historyMarkers.isNotEmpty)
@@ -179,22 +173,6 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
         ],
       ),
     );
-  }
-
-  List<Polygon> _buildDissolvedPolygon(PolygonFeature polygon) {
-    if (polygon.outer.isEmpty) {
-      return const [];
-    }
-    return [
-      Polygon(
-        points: polygon.outer,
-        holePointsList: polygon.holes,
-        color: Colors.transparent,
-        borderColor: polygonSelectedBorderColor,
-        borderStrokeWidth: 3.2,
-        isFilled: false,
-      ),
-    ];
   }
 
   List<Polygon> _buildPolygons(GeofenceMapController controller) {
@@ -589,60 +567,107 @@ class _StatusPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final surfaceColor = theme.colorScheme.surface.withOpacity(0.95);
+    final borderRadius = BorderRadius.circular(18);
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 220),
       switchInCurve: Curves.easeOutCubic,
       switchOutCurve: Curves.easeInCubic,
       child: collapsed
-          ? FloatingActionButton.small(
+          ? Material(
               key: const ValueKey('collapsed_status_panel'),
-              heroTag: 'status_panel_toggle',
-              onPressed: onToggle,
-              tooltip: 'জিপিএস তথ্য খুলুন',
-              child: const Icon(Icons.gps_fixed),
-            )
-          : Material(
-              key: const ValueKey('expanded_status_panel'),
               elevation: 6,
-              borderRadius: BorderRadius.circular(16),
-              color: theme.colorScheme.surface.withOpacity(0.95),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 320),
+              borderRadius: borderRadius,
+              color: surfaceColor,
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: onToggle,
                 child: Padding(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  child: Column(
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
+                      Icon(
+                        Icons.gps_fixed,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(width: 12),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             'জিপিএস তথ্য',
                             style: theme.textTheme.titleMedium,
                           ),
-                          const Spacer(),
-                          IconButton(
-                            onPressed: onToggle,
-                            tooltip: 'সংকুচিত করুন',
-                            icon: const Icon(Icons.close),
+                          const SizedBox(height: 2),
+                          Text(
+                            'সঠিকতা: $accuracyText',
+                            style: theme.textTheme.bodySmall,
                           ),
                         ],
                       ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'জিপিএস এর অবস্থা:',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                      const SizedBox(width: 12),
+                      const Icon(Icons.keyboard_arrow_down),
+                    ],
+                  ),
+                ),
+              ),
+            )
+          : Material(
+              key: const ValueKey('expanded_status_panel'),
+              elevation: 8,
+              borderRadius: borderRadius,
+              color: surfaceColor,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 320),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      InkWell(
+                        onTap: onToggle,
+                        borderRadius: BorderRadius.circular(14),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.gps_fixed,
+                                color: theme.colorScheme.primary,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'জিপিএস তথ্য',
+                                  style: theme.textTheme.titleMedium,
+                                ),
+                              ),
+                              const Icon(Icons.keyboard_arrow_up),
+                            ],
+                          ),
+                        ),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 12),
+                      Text(
+                        'জিপিএস এর অবস্থা',
+                        style: theme.textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 8),
                       Text('সঠিকতা: $accuracyText'),
                       const SizedBox(height: 4),
                       Text(statusMessage),
                       if (errorMessage != null) ...[
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 8),
                         Text(
                           errorMessage!,
-                          style: const TextStyle(color: Colors.red),
+                          style: theme.textTheme.bodyMedium
+                              ?.copyWith(color: Colors.red),
                         ),
                       ],
                     ],
