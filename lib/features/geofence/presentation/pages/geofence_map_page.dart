@@ -31,6 +31,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
   bool _initialised = false;
   double _currentZoom = 15;
   CustomPlace? _selectedCustomPlace;
+  final GlobalKey _polygonButtonKey = GlobalKey();
 
   bool get _showCustomPlaceMarkers =>
       _currentZoom >= _customPlaceMarkerZoomThreshold;
@@ -74,10 +75,25 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             FloatingActionButton(
+              heroTag: 'rotate_btn',
+              onPressed: () => controller.resetRotation(),
+              tooltip: 'উত্তরমুখে ঘোরান',
+              child: const Icon(Icons.north),
+            ),
+            const SizedBox(height: 12),
+            FloatingActionButton(
               heroTag: 'current_location_btn',
               onPressed: () => _goToCurrentLocation(controller),
               tooltip: 'বর্তমান অবস্থানে যান',
               child: const Icon(Icons.my_location),
+            ),
+            const SizedBox(height: 12),
+            FloatingActionButton.extended(
+              key: _polygonButtonKey,
+              heroTag: 'polygon_btn',
+              onPressed: () => _showPolygonSelector(controller),
+              label: const Text('পলিগন নির্বাচন'),
+              icon: const Icon(Icons.layers),
             ),
             const SizedBox(height: 12),
             FloatingActionButton.extended(
@@ -284,6 +300,118 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('বর্তমান অবস্থান এখনও পাওয়া যায়নি।')),
     );
+  }
+
+  Future<void> _showPolygonSelector(GeofenceMapController controller) async {
+    final polygons = controller.polygons;
+    if (polygons.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('কোনও পলিগন পাওয়া যায়নি।')),
+      );
+      return;
+    }
+
+    if (polygons.length == 1) {
+      controller.focusPolygon(polygons.first);
+      return;
+    }
+
+    final RenderBox? buttonBox =
+        _polygonButtonKey.currentContext?.findRenderObject() as RenderBox?;
+    final OverlayState? overlayState = Overlay.of(context);
+    final RenderBox? overlayBox =
+        overlayState?.context.findRenderObject() as RenderBox?;
+
+    PolygonFeature? selected;
+    if (buttonBox != null && overlayBox != null) {
+      final Offset topLeft = buttonBox.localToGlobal(
+        Offset.zero,
+        ancestor: overlayBox,
+      );
+      final Offset bottomRight = buttonBox.localToGlobal(
+        buttonBox.size.bottomRight(Offset.zero),
+        ancestor: overlayBox,
+      );
+      final position = RelativeRect.fromLTRB(
+        topLeft.dx,
+        topLeft.dy,
+        overlayBox.size.width - bottomRight.dx,
+        overlayBox.size.height - bottomRight.dy,
+      );
+
+      selected = await showMenu<PolygonFeature>(
+        context: context,
+        position: position,
+        items: polygons
+            .map(
+              (polygon) => PopupMenuItem<PolygonFeature>(
+                value: polygon,
+                child: Text(_polygonDisplayName(polygon)),
+              ),
+            )
+            .toList(),
+      );
+
+      if (selected == null) {
+        return;
+      }
+    } else {
+      selected = await showModalBottomSheet<PolygonFeature>(
+        context: context,
+        showDragHandle: true,
+        builder: (context) {
+          return SafeArea(
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                const ListTile(
+                  title: Text('একটি পলিগন নির্বাচন করুন'),
+                ),
+                const Divider(height: 0),
+                ...polygons.map(
+                  (polygon) => ListTile(
+                    title: Text(_polygonDisplayName(polygon)),
+                    onTap: () => Navigator.of(context).pop(polygon),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+
+      if (selected == null) {
+        return;
+      }
+    }
+
+    controller.focusPolygon(selected);
+  }
+
+  String _polygonDisplayName(PolygonFeature polygon) {
+    final plotNumber = polygon.properties['plot_number'];
+    if (!isNullOrEmpty(plotNumber)) {
+      return 'প্লট ${formatPropertyValue(plotNumber)}';
+    }
+
+    final name = polygon.properties['name'];
+    if (!isNullOrEmpty(name)) {
+      return formatPropertyValue(name);
+    }
+
+    final ward = polygon.properties['ward'];
+    final block = polygon.properties['block'];
+    if (!isNullOrEmpty(ward) && !isNullOrEmpty(block)) {
+      final wardText = formatPropertyValue(ward);
+      final blockText = formatPropertyValue(block);
+      return '$wardText – $blockText';
+    }
+    if (!isNullOrEmpty(ward)) {
+      return 'ওয়ার্ড ${formatPropertyValue(ward)}';
+    }
+
+    return 'পলিগন ${polygon.id.replaceAll('_', ' ')}';
   }
 
   Future<void> _startAddPlaceFlow(GeofenceMapController controller) async {
