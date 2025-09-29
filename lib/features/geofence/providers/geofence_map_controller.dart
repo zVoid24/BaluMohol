@@ -176,6 +176,29 @@ class GeofenceMapController extends ChangeNotifier {
     await _persistCustomPlaces();
   }
 
+  Future<void> removeCustomPlace(CustomPlace place) async {
+    final index = _customPlaces.indexOf(place);
+    if (index == -1) {
+      return;
+    }
+    _customPlaces.removeAt(index);
+    _notifySafely();
+    await _persistCustomPlaces();
+  }
+
+  Future<void> updateCustomPlace(
+    CustomPlace original,
+    CustomPlace updated,
+  ) async {
+    final index = _customPlaces.indexOf(original);
+    if (index == -1) {
+      return;
+    }
+    _customPlaces[index] = updated;
+    _notifySafely();
+    await _persistCustomPlaces();
+  }
+
   Future<bool> startTracking({bool reset = true}) async {
     if (_trackingActive) {
       return true;

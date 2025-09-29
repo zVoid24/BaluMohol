@@ -19,9 +19,11 @@ class AddPlacePage extends StatefulWidget {
   const AddPlacePage({
     super.key,
     required this.initialLocation,
+    this.existingPlace,
   });
 
   final LatLng initialLocation;
+  final CustomPlace? existingPlace;
 
   @override
   State<AddPlacePage> createState() => _AddPlacePageState();
@@ -72,6 +74,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
   late LatLng _mapCenter;
   Uint8List? _selectedImageBytes;
   String? _selectedImageFileName;
+  bool _imageRemoved = false;
   Timer? _addressDebounce;
   int _addressRequestId = 0;
   int _reverseGeocodeRequestId = 0;
@@ -85,18 +88,39 @@ class _AddPlacePageState extends State<AddPlacePage> {
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController();
-    _categoryController = TextEditingController();
-    _addressController = TextEditingController();
-    _locatedWithinController = TextEditingController();
-    _phoneController = TextEditingController();
-    _websiteController = TextEditingController();
-    _descriptionController = TextEditingController();
-    _selectedLocation = widget.initialLocation;
-    _mapCenter = widget.initialLocation;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _setSelectedLocation(widget.initialLocation, updateAddress: true);
-    });
+    final existingPlace = widget.existingPlace;
+    _nameController = TextEditingController(text: existingPlace?.name ?? '');
+    _categoryController =
+        TextEditingController(text: existingPlace?.category ?? '');
+    _addressController =
+        TextEditingController(text: existingPlace?.address ?? '');
+    _locatedWithinController =
+        TextEditingController(text: existingPlace?.locatedWithin ?? '');
+    _phoneController = TextEditingController(text: existingPlace?.phone ?? '');
+    _websiteController =
+        TextEditingController(text: existingPlace?.website ?? '');
+    _descriptionController =
+        TextEditingController(text: existingPlace?.description ?? '');
+
+    if (existingPlace != null) {
+      _selectedLocation = existingPlace.location;
+      _mapCenter = existingPlace.location;
+      final bytes = existingPlace.imageBytes;
+      if (bytes != null) {
+        _selectedImageBytes = bytes;
+        _selectedImageFileName = 'Current photo';
+        _imageRemoved = false;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _mapController.move(existingPlace.location, 17);
+      });
+    } else {
+      _selectedLocation = widget.initialLocation;
+      _mapCenter = widget.initialLocation;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _setSelectedLocation(widget.initialLocation, updateAddress: true);
+      });
+    }
   }
 
   @override
@@ -504,6 +528,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
       setState(() {
         _selectedImageBytes = bytes;
         _selectedImageFileName = picked.name;
+        _imageRemoved = false;
       });
     } on PlatformException catch (e) {
       if (!mounted) return;
@@ -517,6 +542,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
     setState(() {
       _selectedImageBytes = null;
       _selectedImageFileName = null;
+      _imageRemoved = true;
     });
   }
 
@@ -539,6 +565,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
       return;
     }
 
+    final existingPlace = widget.existingPlace;
     final place = CustomPlace(
       name: _nameController.text.trim(),
       category: _categoryController.text.trim(),
@@ -548,9 +575,10 @@ class _AddPlacePageState extends State<AddPlacePage> {
       phone: _phoneController.text.emptyToNull(),
       website: _websiteController.text.emptyToNull(),
       description: _descriptionController.text.emptyToNull(),
-      createdAt: DateTime.now(),
-      imageBase64:
-          _selectedImageBytes != null ? base64Encode(_selectedImageBytes!) : null,
+      createdAt: existingPlace?.createdAt ?? DateTime.now(),
+      imageBase64: _selectedImageBytes != null
+          ? base64Encode(_selectedImageBytes!)
+          : (_imageRemoved ? null : existingPlace?.imageBase64),
     );
 
     if (!mounted) return;
@@ -565,9 +593,11 @@ class _AddPlacePageState extends State<AddPlacePage> {
         ? formatLatLng(selectedLocation, fractionDigits: 6)
         : 'Tap on the map to select a location';
 
+    final isEditing = widget.existingPlace != null;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add place'),
+        title: Text(isEditing ? 'Edit place' : 'Add place'),
       ),
       resizeToAvoidBottomInset: true,
       body: SafeArea(
@@ -883,7 +913,8 @@ class _AddPlacePageState extends State<AddPlacePage> {
                           child: FilledButton.icon(
                             onPressed: _submit,
                             icon: const Icon(Icons.check_circle),
-                            label: const Text('Save place'),
+                            label:
+                                Text(isEditing ? 'Update place' : 'Save place'),
                           ),
                         ),
                       ],

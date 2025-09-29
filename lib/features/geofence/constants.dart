@@ -50,6 +50,7 @@ const List<String> placeCategories = [
   'Temple',
   'Church',
   'Government office',
+  'Office',
   'Police station',
   'Post office',
   'Courier service',
