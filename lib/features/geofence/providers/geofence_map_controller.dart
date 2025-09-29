@@ -26,10 +26,12 @@ class GeofenceMapController extends ChangeNotifier {
   final List<PolygonFeature> _polygons = [];
   final List<PositionSample> _samples = [];
   final List<LocationHistoryEntry> _history = [];
+  final List<LatLng> _trackingPath = [];
   final List<CustomPlace> _customPlaces = [];
 
   LatLng? _currentLocation;
   double? _currentAccuracy;
+  double? _currentHeading;
   bool _insideTarget = false;
   String _statusMessage = 'সীমানা লোড হচ্ছে...';
   String? _errorMessage;
@@ -37,6 +39,7 @@ class GeofenceMapController extends ChangeNotifier {
   bool _permissionDenied = false;
   bool _hasCenteredOnUser = false;
   bool _initialised = false;
+  bool _trackingActive = false;
 
   LatLng _fallbackCenter = const LatLng(23.8103, 90.4125);
   LatLng? _pendingCenter;
@@ -60,10 +63,6 @@ class GeofenceMapController extends ChangeNotifier {
     await _loadHistory();
     await _loadCustomPlaces();
     await _startLocationTracking();
-    _historyTimer = Timer.periodic(
-      historyInterval,
-      (_) => _recordHistoryEntry(),
-    );
   }
 
   @override
@@ -77,9 +76,11 @@ class GeofenceMapController extends ChangeNotifier {
   List<PolygonFeature> get polygons => List.unmodifiable(_polygons);
   List<LocationHistoryEntry> get history => List.unmodifiable(_history);
   List<CustomPlace> get customPlaces => List.unmodifiable(_customPlaces);
+  List<LatLng> get trackingPath => List.unmodifiable(_trackingPath);
 
   LatLng? get currentLocation => _currentLocation;
   double? get currentAccuracy => _currentAccuracy;
+  double? get currentHeading => _currentHeading;
   bool get insideTarget => _insideTarget;
   String get statusMessage => _statusMessage;
   String? get errorMessage => _errorMessage;
@@ -87,6 +88,7 @@ class GeofenceMapController extends ChangeNotifier {
   LatLng get fallbackCenter => _fallbackCenter;
   PolygonFeature? get selectedPolygon => _selectedPolygon;
   LatLng? get primaryCenter => _primaryCenter;
+  bool get isTracking => _trackingActive;
 
   void onMapReady() {
     _mapReady = true;
@@ -172,6 +174,42 @@ class GeofenceMapController extends ChangeNotifier {
     _customPlaces.add(place);
     _notifySafely();
     await _persistCustomPlaces();
+  }
+
+  Future<bool> startTracking({bool reset = true}) async {
+    if (_trackingActive) {
+      return true;
+    }
+    if (_currentLocation == null || _currentAccuracy == null) {
+      return false;
+    }
+
+    if (reset) {
+      _history.clear();
+      _trackingPath.clear();
+      await _persistHistory();
+    }
+
+    _trackingActive = true;
+    _historyTimer?.cancel();
+    _historyTimer = Timer.periodic(
+      historyInterval,
+      (_) => _recordHistoryEntry(),
+    );
+
+    await _recordHistoryEntry(force: true);
+    _notifySafely();
+    return true;
+  }
+
+  void stopTracking() {
+    if (!_trackingActive) {
+      return;
+    }
+    _trackingActive = false;
+    _historyTimer?.cancel();
+    _historyTimer = null;
+    _notifySafely();
   }
 
   void highlightPolygon(PolygonFeature? polygon) {
@@ -267,6 +305,13 @@ class GeofenceMapController extends ChangeNotifier {
       _history
         ..clear()
         ..addAll(entries);
+      _trackingPath
+        ..clear()
+        ..addAll(
+          entries
+              .map((entry) => LatLng(entry.latitude, entry.longitude))
+              .toList(),
+        );
       _notifySafely();
     } catch (_) {
       // ignore malformed history
@@ -381,8 +426,9 @@ class GeofenceMapController extends ChangeNotifier {
     return zoom.clamp(5, 18).toDouble();
   }
 
-  Future<void> _recordHistoryEntry() async {
+  Future<void> _recordHistoryEntry({bool force = false}) async {
     if (_currentLocation == null || _currentAccuracy == null) return;
+    if (!_trackingActive && !force) return;
     final entry = LocationHistoryEntry(
       latitude: _currentLocation!.latitude,
       longitude: _currentLocation!.longitude,
@@ -391,8 +437,13 @@ class GeofenceMapController extends ChangeNotifier {
       accuracy: _currentAccuracy!,
     );
     _history.add(entry);
+    _trackingPath.add(_currentLocation!);
     if (_history.length > maxHistoryEntries) {
       _history.removeRange(0, _history.length - maxHistoryEntries);
+    }
+    if (_trackingPath.length > maxHistoryEntries) {
+      _trackingPath
+          .removeRange(0, _trackingPath.length - maxHistoryEntries);
     }
     await _persistHistory();
     _notifySafely();
@@ -460,6 +511,7 @@ class GeofenceMapController extends ChangeNotifier {
   }
 
   void _handlePosition(Position position) {
+    final previousLocation = _currentLocation;
     final sample = PositionSample(
       latitude: position.latitude,
       longitude: position.longitude,
@@ -489,6 +541,22 @@ class GeofenceMapController extends ChangeNotifier {
 
     _currentLocation = location;
     _currentAccuracy = bestAccuracySample.accuracy;
+    final headingValue = position.heading;
+    if (headingValue != null && headingValue >= 0) {
+      _currentHeading = headingValue % 360;
+    } else if (previousLocation != null &&
+        (previousLocation.latitude != location.latitude ||
+            previousLocation.longitude != location.longitude)) {
+      final bearing = Geolocator.bearingBetween(
+        previousLocation.latitude,
+        previousLocation.longitude,
+        location.latitude,
+        location.longitude,
+      );
+      if (!bearing.isNaN) {
+        _currentHeading = (bearing + 360) % 360;
+      }
+    }
     _insideTarget = result.inside;
     _statusMessage = result.statusMessage;
     _errorMessage = null;
