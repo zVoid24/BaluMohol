@@ -8,9 +8,13 @@ class PlaceDetailsSheet extends StatelessWidget {
   const PlaceDetailsSheet({
     super.key,
     required this.place,
+    this.onEdit,
+    this.onDelete,
   });
 
   final CustomPlace place;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -39,9 +43,35 @@ class PlaceDetailsSheet extends StatelessWidget {
                 _Header(
                   placeName: placeName,
                   onClose: () => Navigator.of(context).pop(),
+                  onEdit: onEdit,
+                  onDelete: onDelete,
                   titleStyle: theme.textTheme.titleLarge,
                   textColor: theme.colorScheme.onSurface,
                 ),
+                if (onEdit != null || onDelete != null) ...[
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      if (onEdit != null)
+                        OutlinedButton.icon(
+                          onPressed: onEdit,
+                          icon: const Icon(Icons.edit),
+                          label: const Text('স্থান সম্পাদনা করুন'),
+                        ),
+                      if (onDelete != null)
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.redAccent,
+                          ),
+                          onPressed: onDelete,
+                          icon: const Icon(Icons.delete_outline),
+                          label: const Text('স্থান মুছে ফেলুন'),
+                        ),
+                    ],
+                  ),
+                ],
                 if (imageBytes != null) ...[
                   const SizedBox(height: 12),
                   _PlaceImage(imageBytes: imageBytes),
@@ -74,12 +104,16 @@ class _Header extends StatelessWidget {
   const _Header({
     required this.placeName,
     required this.onClose,
+    this.onEdit,
+    this.onDelete,
     required this.titleStyle,
     required this.textColor,
   });
 
   final String placeName;
   final VoidCallback onClose;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
   final TextStyle? titleStyle;
   final Color textColor;
 
@@ -98,6 +132,18 @@ class _Header extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
         ),
+        if (onEdit != null)
+          IconButton(
+            tooltip: 'স্থান সম্পাদনা করুন',
+            onPressed: onEdit,
+            icon: const Icon(Icons.edit_outlined),
+          ),
+        if (onDelete != null)
+          IconButton(
+            tooltip: 'স্থান মুছে ফেলুন',
+            onPressed: onDelete,
+            icon: const Icon(Icons.delete_outline),
+          ),
         IconButton(
           tooltip: 'Close',
           onPressed: onClose,

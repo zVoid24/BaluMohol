@@ -22,6 +22,63 @@ class GeofenceMapPage extends StatefulWidget {
   State<GeofenceMapPage> createState() => _GeofenceMapPageState();
 }
 
+enum _MapLayerType { hybrid, satellite, terrain, roadmap, osm }
+
+class _BaseLayerOption {
+  const _BaseLayerOption({
+    required this.type,
+    required this.label,
+    required this.urlTemplate,
+    this.subdomains,
+    this.subtitle,
+  });
+
+  final _MapLayerType type;
+  final String label;
+  final String urlTemplate;
+  final List<String>? subdomains;
+  final String? subtitle;
+}
+
+const List<String> _googleSubdomains = <String>['mt0', 'mt1', 'mt2', 'mt3'];
+
+const List<_BaseLayerOption> _baseLayerOptions = <_BaseLayerOption>[
+  _BaseLayerOption(
+    type: _MapLayerType.hybrid,
+    label: 'হাইব্রিড',
+    subtitle: 'স্যাটেলাইট ছবি ও মানচিত্র লেবেল',
+    urlTemplate: 'https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}',
+    subdomains: _googleSubdomains,
+  ),
+  _BaseLayerOption(
+    type: _MapLayerType.satellite,
+    label: 'স্যাটেলাইট',
+    subtitle: 'শুধু স্যাটেলাইট ছবি',
+    urlTemplate: 'https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+    subdomains: _googleSubdomains,
+  ),
+  _BaseLayerOption(
+    type: _MapLayerType.terrain,
+    label: 'টেরেইন',
+    subtitle: 'ভূপ্রকৃতি ও উচ্চতার মানচিত্র',
+    urlTemplate: 'https://{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}',
+    subdomains: _googleSubdomains,
+  ),
+  _BaseLayerOption(
+    type: _MapLayerType.roadmap,
+    label: 'স্ট্যান্ডার্ড মানচিত্র',
+    subtitle: 'সাধারণ রাস্তা ও স্থান',
+    urlTemplate: 'https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+    subdomains: _googleSubdomains,
+  ),
+  _BaseLayerOption(
+    type: _MapLayerType.osm,
+    label: 'ওপেনস্ট্রিটম্যাপ',
+    subtitle: 'ওপেন সোর্স কমিউনিটি মানচিত্র',
+    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  ),
+];
+
 class _GeofenceMapPageState extends State<GeofenceMapPage> {
   static const double _customPlaceMarkerZoomThreshold = 14;
   static const double _customPlaceMarkerBaseWidth = 160;
@@ -32,9 +89,14 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
   CustomPlace? _selectedCustomPlace;
   final GlobalKey _polygonButtonKey = GlobalKey();
   bool _statusPanelCollapsed = true;
+  _MapLayerType _selectedLayerType = _MapLayerType.hybrid;
 
   bool get _showCustomPlaceMarkers =>
       _currentZoom >= _customPlaceMarkerZoomThreshold;
+
+  _BaseLayerOption get _selectedBaseLayer => _baseLayerOptions.firstWhere(
+        (option) => option.type == _selectedLayerType,
+      );
 
   @override
   void initState() {
@@ -88,6 +150,13 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
               onPressed: controller.resetRotation,
               tooltip: 'মানচিত্র উত্তরের দিকে ঘোরান',
               child: const Icon(Icons.explore),
+            ),
+            const SizedBox(height: 12),
+            FloatingActionButton.extended(
+              heroTag: 'layer_btn',
+              onPressed: _showLayerSelector,
+              label: const Text('লেয়ার'),
+              icon: const Icon(Icons.layers_outlined),
             ),
             const SizedBox(height: 12),
             FloatingActionButton.extended(
@@ -157,9 +226,9 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
             ),
             children: [
               TileLayer(
-                urlTemplate:
-                    'http://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}',
-                subdomains: const ['mt0', 'mt1', 'mt2', 'mt3'],
+                urlTemplate: _selectedBaseLayer.urlTemplate,
+                subdomains:
+                    _selectedBaseLayer.subdomains ?? const <String>[],
                 userAgentPackageName: 'com.example.balumohol',
               ),
               if (controller.polygons.isNotEmpty)
@@ -198,6 +267,39 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
                   accuracyText: accuracyText,
                   statusMessage: controller.statusMessage,
                   errorMessage: controller.errorMessage,
+                ),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Material(
+                  elevation: 4,
+                  borderRadius: BorderRadius.circular(16),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .surfaceVariant
+                      .withOpacity(0.9),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.layers_outlined, size: 18),
+                        const SizedBox(width: 6),
+                        Text(
+                          'লেয়ার: ${_selectedBaseLayer.label}',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -324,7 +426,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
             alignment: Alignment.bottomCenter,
             child: CustomPlaceMarker(
               place: place,
-              onTap: () => _showCustomPlaceDetails(place),
+              onTap: () => _showCustomPlaceDetails(controller, place),
               scale: scale,
               isSelected: identical(place, _selectedCustomPlace),
             ),
@@ -501,22 +603,137 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     );
   }
 
-  Future<void> _showCustomPlaceDetails(CustomPlace place) async {
+  Future<void> _showCustomPlaceDetails(
+    GeofenceMapController controller,
+    CustomPlace place,
+  ) async {
+    final displayName = place.name.isEmpty ? 'Unnamed place' : place.name;
     setState(() {
       _selectedCustomPlace = place;
     });
 
-    await showModalBottomSheet<void>(
+    final action = await showModalBottomSheet<_PlaceDetailsAction>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (context) => PlaceDetailsSheet(place: place),
+      builder: (context) => PlaceDetailsSheet(
+        place: place,
+        onEdit: () => Navigator.of(context).pop(_PlaceDetailsAction.edit),
+        onDelete: () => Navigator.of(context).pop(_PlaceDetailsAction.delete),
+      ),
     );
 
     if (!mounted) return;
     setState(() {
       _selectedCustomPlace = null;
     });
+
+    if (action == _PlaceDetailsAction.delete) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text('স্থান মুছে ফেলবেন?'),
+            content: Text(
+              'আপনি কি নিশ্চিত যে "$displayName" স্থানটি মানচিত্র থেকে মুছে ফেলতে চান?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('বাতিল'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('মুছে ফেলুন'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (confirmed == true) {
+        await controller.removeCustomPlace(place);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('📍 "$displayName" মুছে ফেলা হয়েছে।')),
+        );
+      }
+      return;
+    }
+
+    if (action == _PlaceDetailsAction.edit) {
+      final updatedPlace = await Navigator.of(context).push<CustomPlace>(
+        MaterialPageRoute(
+          builder: (context) => AddPlacePage(
+            initialLocation: place.location,
+            existingPlace: place,
+          ),
+        ),
+      );
+
+      if (updatedPlace != null) {
+        await controller.updateCustomPlace(place, updatedPlace);
+        if (!mounted) return;
+        final updatedName =
+            updatedPlace.name.isEmpty ? displayName : updatedPlace.name;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('📍 "$updatedName" হালনাগাদ হয়েছে।')),
+        );
+        controller.moveMap(updatedPlace.location, defaultFollowZoom);
+      }
+    }
+  }
+
+  Future<void> _showLayerSelector() async {
+    final selected = await showModalBottomSheet<_MapLayerType>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const ListTile(
+                  title: Text(
+                    'একটি লেয়ার নির্বাচন করুন',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                const Divider(height: 0),
+                ..._baseLayerOptions.map(
+                  (option) => RadioListTile<_MapLayerType>(
+                    value: option.type,
+                    groupValue: _selectedLayerType,
+                    title: Text(option.label),
+                    subtitle:
+                        option.subtitle != null ? Text(option.subtitle!) : null,
+                    onChanged: (value) => Navigator.of(context).pop(option.type),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (!mounted || selected == null || selected == _selectedLayerType) {
+      return;
+    }
+
+    setState(() {
+      _selectedLayerType = selected;
+    });
+
+    final option = _baseLayerOptions.firstWhere(
+      (layer) => layer.type == selected,
+    );
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('লেয়ার "${option.label}" নির্বাচিত হয়েছে।')),
+    );
   }
 
   Future<void> _showPolygonDetails(
@@ -610,6 +827,8 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     );
   }
 }
+
+enum _PlaceDetailsAction { edit, delete }
 
 class _StatusPanel extends StatelessWidget {
   const _StatusPanel({
