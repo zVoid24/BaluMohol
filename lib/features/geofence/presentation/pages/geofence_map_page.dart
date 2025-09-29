@@ -32,6 +32,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
   double _currentZoom = 15;
   CustomPlace? _selectedCustomPlace;
   final GlobalKey _polygonButtonKey = GlobalKey();
+  bool _mapControlsExpanded = false;
 
   bool get _showCustomPlaceMarkers =>
       _currentZoom >= _customPlaceMarkerZoomThreshold;
@@ -61,6 +62,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     final historyMarkers = _buildHistoryMarkers(controller);
     final customPlaceMarkers =
         _showCustomPlaceMarkers ? _buildCustomPlaceMarkers(controller) : <Marker>[];
+    final dissolvedPolygon = controller.dissolvedPolygon;
 
     final accuracyValue = controller.currentAccuracy;
     final accuracyText = accuracyValue != null
@@ -74,13 +76,6 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            FloatingActionButton(
-              heroTag: 'rotate_btn',
-              onPressed: () => controller.resetRotation(),
-              tooltip: 'উত্তরমুখে ঘোরান',
-              child: const Icon(Icons.north),
-            ),
-            const SizedBox(height: 12),
             FloatingActionButton(
               heroTag: 'current_location_btn',
               onPressed: () => _goToCurrentLocation(controller),
@@ -143,6 +138,10 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.example.balumohol',
               ),
+              if (dissolvedPolygon != null)
+                PolygonLayer(
+                  polygons: _buildDissolvedPolygon(dissolvedPolygon),
+                ),
               if (controller.polygons.isNotEmpty)
                 PolygonLayer(polygons: _buildPolygons(controller)),
               if (historyMarkers.isNotEmpty)
@@ -165,9 +164,50 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
               ),
             ),
           ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Align(
+                alignment: Alignment.topRight,
+                child: _CompassPanel(
+                  expanded: _mapControlsExpanded,
+                  onToggle: () {
+                    setState(() {
+                      _mapControlsExpanded = !_mapControlsExpanded;
+                    });
+                  },
+                  onCenterNorth: () {
+                    controller.resetRotation();
+                    controller.centerOnPrimaryArea();
+                    if (_mapControlsExpanded) {
+                      setState(() {
+                        _mapControlsExpanded = false;
+                      });
+                    }
+                  },
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  List<Polygon> _buildDissolvedPolygon(PolygonFeature polygon) {
+    if (polygon.outer.isEmpty) {
+      return const [];
+    }
+    return [
+      Polygon(
+        points: polygon.outer,
+        holePointsList: polygon.holes,
+        color: Colors.transparent,
+        borderColor: polygonSelectedBorderColor,
+        borderStrokeWidth: 3.2,
+        isFilled: false,
+      ),
+    ];
   }
 
   List<Polygon> _buildPolygons(GeofenceMapController controller) {
@@ -473,6 +513,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
   Future<void> _showCurrentLocationDetails(
     GeofenceMapController controller,
   ) async {
+    if (!mounted) return;
     final location = controller.currentLocation;
     if (location == null) {
       return;
@@ -514,6 +555,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
   }
 
   Future<void> _showHistoryEntryDetails(LocationHistoryEntry entry) async {
+    if (!mounted) return;
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {
@@ -538,6 +580,83 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
           ],
         );
       },
+    );
+  }
+}
+
+class _CompassPanel extends StatelessWidget {
+  const _CompassPanel({
+    required this.expanded,
+    required this.onToggle,
+    required this.onCenterNorth,
+  });
+
+  final bool expanded;
+  final VoidCallback onToggle;
+  final VoidCallback onCenterNorth;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      child: expanded
+          ? Container(
+              key: const ValueKey('expanded_compass_panel'),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface.withOpacity(0.95),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.18),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'মানচিত্র নিয়ন্ত্রণ',
+                        style: theme.textTheme.titleMedium,
+                      ),
+                      const SizedBox(width: 4),
+                      IconButton(
+                        onPressed: onToggle,
+                        tooltip: 'বন্ধ করুন',
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  FilledButton.icon(
+                    onPressed: onCenterNorth,
+                    icon: const Icon(Icons.explore),
+                    label: const Text('উত্তরমুখে ঘোরান'),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'এই বোতামটি কম্পাসের মতো কাজ করে — ট্যাপ করলেই মানচিত্র উত্তরের দিকে ঘুরে কেন্দ্রীয় এলাকায় জুম করবে।',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            )
+          : FloatingActionButton.small(
+              key: const ValueKey('collapsed_compass_panel'),
+              heroTag: 'compass_toggle_fab',
+              onPressed: onToggle,
+              tooltip: 'কম্পাস নিয়ন্ত্রণ খুলুন',
+              child: const Icon(Icons.explore),
+            ),
     );
   }
 }
