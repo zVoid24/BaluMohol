@@ -12,7 +12,6 @@ import 'package:balumohol/features/geofence/presentation/widgets/current_locatio
 import 'package:balumohol/features/geofence/presentation/widgets/custom_place_marker.dart';
 import 'package:balumohol/features/geofence/presentation/widgets/place_details_sheet.dart';
 import 'package:balumohol/features/geofence/presentation/widgets/polygon_details_sheet.dart';
-import 'package:balumohol/features/geofence/presentation/widgets/status_card.dart';
 import 'package:balumohol/features/geofence/providers/geofence_map_controller.dart';
 import 'package:balumohol/features/places/presentation/pages/add_place_page.dart';
 
@@ -32,7 +31,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
   double _currentZoom = 15;
   CustomPlace? _selectedCustomPlace;
   final GlobalKey _polygonButtonKey = GlobalKey();
-  bool _mapControlsExpanded = false;
+  bool _statusPanelCollapsed = false;
 
   bool get _showCustomPlaceMarkers =>
       _currentZoom >= _customPlaceMarkerZoomThreshold;
@@ -81,6 +80,13 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
               onPressed: () => _goToCurrentLocation(controller),
               tooltip: 'বর্তমান অবস্থানে যান',
               child: const Icon(Icons.my_location),
+            ),
+            const SizedBox(height: 12),
+            FloatingActionButton(
+              heroTag: 'compass_btn',
+              onPressed: controller.resetRotation,
+              tooltip: 'মানচিত্র উত্তরের দিকে ঘোরান',
+              child: const Icon(Icons.explore),
             ),
             const SizedBox(height: 12),
             FloatingActionButton.extended(
@@ -155,36 +161,17 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Align(
-                alignment: Alignment.topLeft,
-                child: StatusCard(
+                alignment: Alignment.topRight,
+                child: _StatusPanel(
+                  collapsed: _statusPanelCollapsed,
+                  onToggle: () {
+                    setState(() {
+                      _statusPanelCollapsed = !_statusPanelCollapsed;
+                    });
+                  },
                   accuracyText: accuracyText,
                   statusMessage: controller.statusMessage,
                   errorMessage: controller.errorMessage,
-                ),
-              ),
-            ),
-          ),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Align(
-                alignment: Alignment.topRight,
-                child: _CompassPanel(
-                  expanded: _mapControlsExpanded,
-                  onToggle: () {
-                    setState(() {
-                      _mapControlsExpanded = !_mapControlsExpanded;
-                    });
-                  },
-                  onCenterNorth: () {
-                    controller.resetRotation();
-                    controller.centerOnPrimaryArea();
-                    if (_mapControlsExpanded) {
-                      setState(() {
-                        _mapControlsExpanded = false;
-                      });
-                    }
-                  },
                 ),
               ),
             ),
@@ -584,16 +571,20 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
   }
 }
 
-class _CompassPanel extends StatelessWidget {
-  const _CompassPanel({
-    required this.expanded,
+class _StatusPanel extends StatelessWidget {
+  const _StatusPanel({
+    required this.collapsed,
     required this.onToggle,
-    required this.onCenterNorth,
+    required this.accuracyText,
+    required this.statusMessage,
+    this.errorMessage,
   });
 
-  final bool expanded;
+  final bool collapsed;
   final VoidCallback onToggle;
-  final VoidCallback onCenterNorth;
+  final String accuracyText;
+  final String statusMessage;
+  final String? errorMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -602,60 +593,62 @@ class _CompassPanel extends StatelessWidget {
       duration: const Duration(milliseconds: 220),
       switchInCurve: Curves.easeOutCubic,
       switchOutCurve: Curves.easeInCubic,
-      child: expanded
-          ? Container(
-              key: const ValueKey('expanded_compass_panel'),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface.withOpacity(0.95),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.18),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+      child: collapsed
+          ? FloatingActionButton.small(
+              key: const ValueKey('collapsed_status_panel'),
+              heroTag: 'status_panel_toggle',
+              onPressed: onToggle,
+              tooltip: 'জিপিএস তথ্য খুলুন',
+              child: const Icon(Icons.gps_fixed),
+            )
+          : Material(
+              key: const ValueKey('expanded_status_panel'),
+              elevation: 6,
+              borderRadius: BorderRadius.circular(16),
+              color: theme.colorScheme.surface.withOpacity(0.95),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 320),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  child: Column(
                     mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'মানচিত্র নিয়ন্ত্রণ',
-                        style: theme.textTheme.titleMedium,
+                      Row(
+                        children: [
+                          Text(
+                            'জিপিএস তথ্য',
+                            style: theme.textTheme.titleMedium,
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            onPressed: onToggle,
+                            tooltip: 'সংকুচিত করুন',
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 4),
-                      IconButton(
-                        onPressed: onToggle,
-                        tooltip: 'বন্ধ করুন',
-                        icon: const Icon(Icons.close),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'জিপিএস এর অবস্থা:',
+                        style: TextStyle(fontWeight: FontWeight.bold),
                       ),
+                      const SizedBox(height: 6),
+                      Text('সঠিকতা: $accuracyText'),
+                      const SizedBox(height: 4),
+                      Text(statusMessage),
+                      if (errorMessage != null) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          errorMessage!,
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                      ],
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  FilledButton.icon(
-                    onPressed: onCenterNorth,
-                    icon: const Icon(Icons.explore),
-                    label: const Text('উত্তরমুখে ঘোরান'),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'এই বোতামটি কম্পাসের মতো কাজ করে — ট্যাপ করলেই মানচিত্র উত্তরের দিকে ঘুরে কেন্দ্রীয় এলাকায় জুম করবে।',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ],
+                ),
               ),
-            )
-          : FloatingActionButton.small(
-              key: const ValueKey('collapsed_compass_panel'),
-              heroTag: 'compass_toggle_fab',
-              onPressed: onToggle,
-              tooltip: 'কম্পাস নিয়ন্ত্রণ খুলুন',
-              child: const Icon(Icons.explore),
             ),
     );
   }
