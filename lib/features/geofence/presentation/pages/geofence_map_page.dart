@@ -34,7 +34,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage>
   bool _initialised = false;
   double _currentZoom = 15;
   double _currentRotation = 0;
-  bool _statusCollapsed = false;
+  bool _statusCollapsed = true;
   CustomPlace? _selectedCustomPlace;
   final GlobalKey _polygonButtonKey = GlobalKey();
 
@@ -107,7 +107,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage>
         minimum: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildQuickActionPanel(context, controller),
             const SizedBox(height: 12),
@@ -278,21 +278,33 @@ class _GeofenceMapPageState extends State<GeofenceMapPage>
                   ),
                 ),
               ),
-              AnimatedCrossFade(
-                firstChild: const SizedBox.shrink(),
-                secondChild: Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-                  child: StatusCard(
-                    accuracyText: accuracyText,
-                    statusMessage: controller.statusMessage,
-                    errorMessage: controller.errorMessage,
-                  ),
-                ),
-                crossFadeState: _statusCollapsed
-                    ? CrossFadeState.showFirst
-                    : CrossFadeState.showSecond,
+              AnimatedSwitcher(
                 duration: const Duration(milliseconds: 250),
-                sizeCurve: Curves.easeInOutCubic,
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) {
+                  return ClipRect(
+                    child: FadeTransition(
+                      opacity: animation,
+                      child: SizeTransition(
+                        sizeFactor: animation,
+                        axisAlignment: -1.0,
+                        child: child,
+                      ),
+                    ),
+                  );
+                },
+                child: _statusCollapsed
+                    ? const SizedBox.shrink(key: ValueKey('status_collapsed'))
+                    : Padding(
+                        key: const ValueKey('status_expanded'),
+                        padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+                        child: StatusCard(
+                          accuracyText: accuracyText,
+                          statusMessage: controller.statusMessage,
+                          errorMessage: controller.errorMessage,
+                        ),
+                      ),
               ),
             ],
           ),
@@ -1012,9 +1024,15 @@ class _PanelButton extends StatelessWidget {
             label: Text(label),
           );
 
-    return SizedBox(
-      width: 240,
-      child: button,
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 260),
+        child: SizedBox(
+          width: double.infinity,
+          child: button,
+        ),
+      ),
     );
   }
 }
