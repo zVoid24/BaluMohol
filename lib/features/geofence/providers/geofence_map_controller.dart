@@ -44,7 +44,6 @@ class GeofenceMapController extends ChangeNotifier {
   double? _pendingRotation;
   PolygonFeature? _selectedPolygon;
   PolygonFeature? _primaryPolygon;
-  PolygonFeature? _dissolvedPolygon;
   LatLng? _primaryCenter;
 
   SharedPreferences? _prefs;
@@ -87,7 +86,6 @@ class GeofenceMapController extends ChangeNotifier {
   bool get permissionDenied => _permissionDenied;
   LatLng get fallbackCenter => _fallbackCenter;
   PolygonFeature? get selectedPolygon => _selectedPolygon;
-  PolygonFeature? get dissolvedPolygon => _dissolvedPolygon;
   LatLng? get primaryCenter => _primaryCenter;
 
   void onMapReady() {
@@ -127,7 +125,7 @@ class GeofenceMapController extends ChangeNotifier {
       highlightPolygon(null);
     }
 
-    final targetPolygon = _dissolvedPolygon ?? _primaryPolygon;
+    final targetPolygon = _primaryPolygon;
     if (targetPolygon != null) {
       final bounds = _boundsForPolygon(targetPolygon);
       if (bounds != null) {
@@ -206,23 +204,27 @@ class GeofenceMapController extends ChangeNotifier {
       final Map<String, dynamic> data =
           json.decode(raw) as Map<String, dynamic>;
       final polygons = parsePolygons(data);
-      final dissolved = dissolvePolygons(polygons);
       final center = computeBoundsCenter(polygons);
       final centralPolygon = _findCentralPolygon(polygons, center);
-      final resolvedCenter = dissolved != null
-          ? polygonCentroid(dissolved)
-          : (centralPolygon != null
-              ? polygonCentroid(centralPolygon)
-              : center);
+      final resolvedCenter = centralPolygon != null
+          ? polygonCentroid(centralPolygon)
+          : center;
       _polygons
         ..clear()
         ..addAll(polygons);
       _selectedPolygon = null;
       _primaryPolygon = centralPolygon;
-      _dissolvedPolygon = dissolved;
       _primaryCenter = resolvedCenter ?? center;
 
-      final focusPolygon = _dissolvedPolygon ?? _primaryPolygon;
+      PolygonFeature? focusPolygon = _primaryPolygon;
+      if (focusPolygon == null) {
+        final withOuter = polygons.where((polygon) => polygon.outer.isNotEmpty);
+        if (withOuter.isNotEmpty) {
+          focusPolygon = withOuter.first;
+        } else if (polygons.isNotEmpty) {
+          focusPolygon = polygons.first;
+        }
+      }
       if (focusPolygon != null) {
         final bounds = _boundsForPolygon(focusPolygon);
         if (bounds != null) {
