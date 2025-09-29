@@ -387,8 +387,7 @@ class GeofenceMapController extends ChangeNotifier {
               .where((name) => name.isNotEmpty),
         );
       _selectedMouzaNames
-        ..clear()
-        ..addAll(_availableMouzaNames);
+        ..removeWhere((name) => !_availableMouzaNames.contains(name));
 
       _geofencePolygons
         ..clear()

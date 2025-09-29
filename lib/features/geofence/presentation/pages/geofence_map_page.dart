@@ -164,16 +164,9 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
       ),
       body: Row(
         children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeInOut,
-            width: _isSidebarCollapsed ? 0 : 320,
-            clipBehavior: Clip.hardEdge,
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-            ),
-            child: IgnorePointer(
-              ignoring: _isSidebarCollapsed,
+          if (!_isSidebarCollapsed) ...[
+            SizedBox(
+              width: 320,
               child: _MapSidebar(
                 controller: controller,
                 isTracking: isTracking,
@@ -189,9 +182,8 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
                 onToggleOtherPolygons: controller.setShowOtherPolygons,
               ),
             ),
-          ),
-          if (!_isSidebarCollapsed)
             const VerticalDivider(width: 1, thickness: 1),
+          ],
           Expanded(
             child: Stack(
               children: [
