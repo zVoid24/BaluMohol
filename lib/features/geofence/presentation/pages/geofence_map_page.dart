@@ -351,11 +351,6 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
       if (label == null || label.isEmpty) continue;
       final bool isSelected = polygon.id == selectedId;
       final customColor = _customPolygonColor(polygon.properties);
-      final backgroundColor = customColor != null
-          ? customColor.withOpacity(isSelected ? 0.9 : 0.75)
-          : Colors.black.withOpacity(isSelected ? 0.85 : 0.7);
-      final textColor =
-          backgroundColor.computeLuminance() > 0.6 ? Colors.black : Colors.white;
       markers.add(
         Marker(
           point: centroid,
@@ -365,45 +360,29 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
           child: Builder(
             builder: (context) {
               final theme = Theme.of(context);
-              final textStyle = theme.textTheme.labelMedium?.copyWith(
-                    color: textColor,
-                    fontWeight: FontWeight.w600,
-                  ) ??
-                  TextStyle(
-                    color: textColor,
+              final baseTextStyle = theme.textTheme.labelMedium ??
+                  const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   );
+              final textColor = customColor ?? theme.colorScheme.onSurface;
+              final textStyle = baseTextStyle.copyWith(
+                color: textColor,
+                fontWeight: FontWeight.w600,
+              );
               return IgnorePointer(
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 180),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: backgroundColor,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.85),
-                          width: 1,
-                        ),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Colors.black26,
-                            blurRadius: 6,
-                            offset: Offset(0, 3),
-                          ),
-                        ],
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        child: Text(
-                          label,
-                          textAlign: TextAlign.center,
-                          style: textStyle,
-                        ),
+                      child: Text(
+                        label,
+                        textAlign: TextAlign.center,
+                        style: textStyle,
                       ),
                     ),
                   ),
