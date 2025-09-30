@@ -7,6 +7,7 @@ const String historyStorageKey = 'locationHistory';
 const Duration sampleRetentionDuration = Duration(seconds: 12);
 const double defaultFollowZoom = 17;
 const String customPlacesStorageKey = 'customPlaces';
+const String userPolygonsStorageKey = 'userPolygons';
 
 const List<String> placeCategories = [
   'Restaurant',
