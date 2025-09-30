@@ -92,7 +92,7 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
     final nameController = TextEditingController();
     Color selectedColor = _polygonColorOptions.first.color;
     try {
-      return showDialog<_PolygonDetails>(
+      return await showDialog<_PolygonDetails>(
         context: context,
         builder: (context) {
           return StatefulBuilder(
