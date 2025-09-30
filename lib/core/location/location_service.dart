@@ -64,7 +64,8 @@ class GeolocatorLocationService implements LocationService {
       );
     }
     return Geolocator.getCurrentPosition(
-      desiredAccuracy: desiredAccuracy,
+      // ignore: deprecated_member_use
+      desiredAccuracy: desiredAccuracy ?? LocationAccuracy.best,
       timeLimit: timeLimit,
     );
   }
