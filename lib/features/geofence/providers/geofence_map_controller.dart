@@ -17,6 +17,7 @@ import 'package:balumohol/features/geofence/models/geofence_result.dart';
 import 'package:balumohol/features/geofence/models/location_history_entry.dart';
 import 'package:balumohol/features/geofence/models/polygon_feature.dart';
 import 'package:balumohol/features/geofence/models/position_sample.dart';
+import 'package:balumohol/features/geofence/models/user_polygon.dart';
 import 'package:balumohol/features/geofence/utils/geo_utils.dart';
 
 class GeofenceMapController extends ChangeNotifier {
@@ -33,6 +34,7 @@ class GeofenceMapController extends ChangeNotifier {
               _selectedMouzaNames.contains(_mouzaNameForPolygon(polygon)),
         ),
         if (_showOtherPolygons) ..._otherPolygons,
+        ..._userPolygons.map(_userPolygonToFeature),
       ]);
     _geofencePolygons
       ..clear()
@@ -60,6 +62,7 @@ class GeofenceMapController extends ChangeNotifier {
   final List<LocationHistoryEntry> _history = [];
   final List<LatLng> _trackingPath = [];
   final List<CustomPlace> _customPlaces = [];
+  final List<UserPolygon> _userPolygons = [];
   bool _showBoundary = false;
   bool _showOtherPolygons = false;
 
@@ -96,6 +99,7 @@ class GeofenceMapController extends ChangeNotifier {
     await _loadGeoJsonBoundary();
     await _loadHistory();
     await _loadCustomPlaces();
+    await _loadUserPolygons();
     await _startLocationTracking();
   }
 
@@ -118,6 +122,7 @@ class GeofenceMapController extends ChangeNotifier {
   List<LocationHistoryEntry> get history => List.unmodifiable(_history);
   List<CustomPlace> get customPlaces => List.unmodifiable(_customPlaces);
   List<LatLng> get trackingPath => List.unmodifiable(_trackingPath);
+  List<UserPolygon> get userPolygons => List.unmodifiable(_userPolygons);
 
   LatLng? get currentLocation => _currentLocation;
   double? get currentAccuracy => _currentAccuracy;
@@ -132,6 +137,10 @@ class GeofenceMapController extends ChangeNotifier {
   bool get isTracking => _trackingActive;
   bool get showBoundary => _showBoundary;
   bool get showOtherPolygons => _showOtherPolygons;
+
+  String? displayNameForPolygon(PolygonFeature polygon) {
+    return polygonDisplayName(polygon);
+  }
 
   void onMapReady() {
     _mapReady = true;
@@ -213,6 +222,12 @@ class GeofenceMapController extends ChangeNotifier {
     _customPlaces.add(place);
     _notifySafely();
     await _persistCustomPlaces();
+  }
+
+  Future<void> addUserPolygon(UserPolygon polygon) async {
+    _userPolygons.add(polygon);
+    _refreshVisiblePolygons();
+    await _persistUserPolygons();
   }
 
   Future<void> removeCustomPlace(CustomPlace place) async {
@@ -569,6 +584,25 @@ class GeofenceMapController extends ChangeNotifier {
     }
   }
 
+  Future<void> _loadUserPolygons() async {
+    final stored = _prefs?.getString(userPolygonsStorageKey);
+    if (stored == null) return;
+    try {
+      final decoded = json.decode(stored) as List<dynamic>;
+      final polygons = decoded
+          .whereType<Map<String, dynamic>>()
+          .map(UserPolygon.fromJson)
+          .where((polygon) => polygon.points.length >= 3)
+          .toList();
+      _userPolygons
+        ..clear()
+        ..addAll(polygons);
+      _refreshVisiblePolygons();
+    } catch (_) {
+      // ignore malformed stored data
+    }
+  }
+
   Future<void> _persistHistory() async {
     final encoded = json.encode(_history.map((e) => e.toJson()).toList());
     await _prefs?.setString(historyStorageKey, encoded);
@@ -579,6 +613,13 @@ class GeofenceMapController extends ChangeNotifier {
       _customPlaces.map((place) => place.toJson()).toList(),
     );
     await _prefs?.setString(customPlacesStorageKey, encoded);
+  }
+
+  Future<void> _persistUserPolygons() async {
+    final encoded = json.encode(
+      _userPolygons.map((polygon) => polygon.toJson()).toList(),
+    );
+    await _prefs?.setString(userPolygonsStorageKey, encoded);
   }
 
   PolygonFeature? _findCentralPolygon(
@@ -823,7 +864,7 @@ class GeofenceMapController extends ChangeNotifier {
     }
 
     if (containingPolygon != null) {
-      final polygonName = _polygonDisplayName(containingPolygon);
+      final polygonName = polygonDisplayName(containingPolygon);
       final locationText =
           polygonName != null ? '$polygonName এলাকায়' : 'নির্ধারিত এলাকায়';
       return GeofenceResult(
@@ -848,6 +889,22 @@ class GeofenceMapController extends ChangeNotifier {
     notifyListeners();
     return true;
   }
+}
+
+PolygonFeature _userPolygonToFeature(UserPolygon polygon) {
+  final displayName = polygon.name.isNotEmpty
+      ? polygon.name
+      : 'ব্যবহারকারী পলিগন';
+  return PolygonFeature(
+    id: 'user_${polygon.id}',
+    outer: polygon.points,
+    holes: const [],
+    properties: {
+      'display_name': displayName,
+      'user_color': polygon.colorValue,
+      'layer_type': 'ব্যবহারকারী পলিগন',
+    },
+  );
 }
 
 List<PolygonFeature> _withPrefixedIds(
@@ -882,7 +939,7 @@ String? _mouzaNameForPolygon(PolygonFeature polygon) {
   return mouza.toString();
 }
 
-String? _polygonDisplayName(PolygonFeature polygon) {
+String? polygonDisplayName(PolygonFeature polygon) {
   final properties = polygon.properties;
 
   String? _stringValue(dynamic value) {

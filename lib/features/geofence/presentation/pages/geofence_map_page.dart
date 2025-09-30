@@ -8,11 +8,13 @@ import 'package:balumohol/features/geofence/constants.dart';
 import 'package:balumohol/features/geofence/models/custom_place.dart';
 import 'package:balumohol/features/geofence/models/location_history_entry.dart';
 import 'package:balumohol/features/geofence/models/polygon_feature.dart';
+import 'package:balumohol/features/geofence/models/user_polygon.dart';
 import 'package:balumohol/features/geofence/presentation/widgets/current_location_indicator.dart';
 import 'package:balumohol/features/geofence/presentation/widgets/custom_place_marker.dart';
 import 'package:balumohol/features/geofence/presentation/widgets/place_details_sheet.dart';
 import 'package:balumohol/features/geofence/presentation/widgets/polygon_details_sheet.dart';
 import 'package:balumohol/features/geofence/providers/geofence_map_controller.dart';
+import 'package:balumohol/features/geofence/utils/geo_utils.dart';
 import 'package:balumohol/features/places/presentation/pages/add_place_page.dart';
 
 class GeofenceMapPage extends StatefulWidget {
@@ -79,6 +81,31 @@ const List<_BaseLayerOption> _baseLayerOptions = <_BaseLayerOption>[
   ),
 ];
 
+class _PolygonColorOption {
+  const _PolygonColorOption(this.label, this.color);
+
+  final String label;
+  final Color color;
+}
+
+const List<_PolygonColorOption> _polygonColorOptions = <_PolygonColorOption>[
+  _PolygonColorOption('নীল', Color(0xFF1976D2)),
+  _PolygonColorOption('সবুজ', Color(0xFF2E7D32)),
+  _PolygonColorOption('কমলা', Color(0xFFEF6C00)),
+  _PolygonColorOption('বেগুনি', Color(0xFF6A1B9A)),
+  _PolygonColorOption('লাল', Color(0xFFC62828)),
+];
+
+class _NewPolygonDetails {
+  const _NewPolygonDetails({
+    required this.name,
+    required this.color,
+  });
+
+  final String name;
+  final Color color;
+}
+
 class _GeofenceMapPageState extends State<GeofenceMapPage> {
   static const double _customPlaceMarkerZoomThreshold = 14;
   static const double _customPlaceMarkerBaseWidth = 160;
@@ -89,6 +116,8 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
   CustomPlace? _selectedCustomPlace;
   bool _statusPanelCollapsed = true;
   _MapLayerType _selectedLayerType = _MapLayerType.hybrid;
+  bool _isDrawingPolygon = false;
+  final List<LatLng> _draftPolygonPoints = <LatLng>[];
 
   bool get _showCustomPlaceMarkers =>
       _currentZoom >= _customPlaceMarkerZoomThreshold;
@@ -124,6 +153,11 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
         ? _buildCustomPlaceMarkers(controller)
         : <Marker>[];
     final pathPoints = controller.trackingPath;
+    final polygonLabelMarkers = _buildPolygonLabels(controller);
+    final draftMarkers =
+        _isDrawingPolygon ? _buildDraftPolygonMarkers() : const <Marker>[];
+    final draftPoints = List<LatLng>.from(_draftPolygonPoints);
+    final bool isDrawingPolygon = _isDrawingPolygon;
     final accuracyValue = controller.currentAccuracy;
     final accuracyText = accuracyValue != null
         ? formatMeters(accuracyValue, fractionDigits: 0)
@@ -145,6 +179,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
           controller: controller,
           isTracking: isTracking,
           onAddPlace: () => _startAddPlaceFlow(controller),
+          onAddPolygon: () => _startPolygonDrawing(controller),
           onToggleTracking: trackingCallback,
           onCalibrate: calibrateCallback,
           onShowLayerSelector: _showLayerSelector,
@@ -193,6 +228,12 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
               initialCenter: controller.fallbackCenter,
               initialZoom: 15,
               onTap: (tapPosition, point) async {
+                if (_isDrawingPolygon) {
+                  setState(() {
+                    _draftPolygonPoints.add(point);
+                  });
+                  return;
+                }
                 final polygon = controller.polygonAt(point);
                 if (polygon != null) {
                   await _showPolygonDetails(controller, polygon);
@@ -218,6 +259,35 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
               ),
               if (controller.polygons.isNotEmpty)
                 PolygonLayer(polygons: _buildPolygons(controller)),
+              if (polygonLabelMarkers.isNotEmpty)
+                MarkerLayer(markers: polygonLabelMarkers),
+              if (isDrawingPolygon && draftPoints.length >= 3)
+                PolygonLayer(
+                  polygons: [
+                    Polygon(
+                      points: draftPoints,
+                      color: Colors.deepOrangeAccent.withOpacity(0.2),
+                      borderColor: Colors.deepOrangeAccent,
+                      borderStrokeWidth: 3,
+                      isFilled: true,
+                    ),
+                  ],
+                ),
+              if (isDrawingPolygon && draftPoints.length >= 2)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: [
+                        ...draftPoints,
+                        if (draftPoints.length >= 3) draftPoints.first,
+                      ],
+                      strokeWidth: 3,
+                      color: Colors.deepOrangeAccent,
+                    ),
+                  ],
+                ),
+              if (isDrawingPolygon && draftMarkers.isNotEmpty)
+                MarkerLayer(markers: draftMarkers),
               if (pathPoints.length >= 2)
                 PolylineLayer(
                   polylines: [
@@ -237,6 +307,8 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
               if (currentMarker != null) MarkerLayer(markers: [currentMarker]),
             ],
           ),
+          if (isDrawingPolygon)
+            _buildPolygonDrawingOverlay(controller, draftPoints.length),
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(12),
@@ -288,18 +360,162 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     return controller.polygons.where((polygon) => polygon.outer.isNotEmpty).map(
       (polygon) {
         final bool isSelected = polygon.id == selectedId;
+        final customColor = _customPolygonColor(polygon.properties);
+        final Color fillColor;
+        final Color borderColor;
+        if (customColor != null) {
+          fillColor = customColor.withOpacity(isSelected ? 0.45 : 0.28);
+          borderColor = customColor;
+        } else {
+          fillColor =
+              isSelected ? polygonSelectedFillColor : polygonBaseFillColor;
+          borderColor = isSelected
+              ? polygonSelectedBorderColor
+              : polygonBaseBorderColor;
+        }
         return Polygon(
           points: polygon.outer,
           holePointsList: polygon.holes,
-          color: isSelected ? polygonSelectedFillColor : polygonBaseFillColor,
-          borderColor: isSelected
-              ? polygonSelectedBorderColor
-              : polygonBaseBorderColor,
+          color: fillColor,
+          borderColor: borderColor,
           borderStrokeWidth: isSelected ? 3.6 : 2.8,
           isFilled: true,
         );
       },
     ).toList();
+  }
+
+  Color? _customPolygonColor(Map<String, dynamic> properties) {
+    final value = properties['user_color'];
+    if (value is int) {
+      return Color(value);
+    }
+    if (value is num) {
+      return Color(value.toInt());
+    }
+    return null;
+  }
+
+  List<Marker> _buildPolygonLabels(GeofenceMapController controller) {
+    final polygons = controller.polygons;
+    if (polygons.isEmpty) {
+      return const [];
+    }
+    final selectedId = controller.selectedPolygon?.id;
+    final markers = <Marker>[];
+    for (final polygon in polygons) {
+      final centroid = polygonCentroid(polygon);
+      if (centroid == null) continue;
+      final label = controller.displayNameForPolygon(polygon);
+      if (label == null || label.isEmpty) continue;
+      final bool isSelected = polygon.id == selectedId;
+      final customColor = _customPolygonColor(polygon.properties);
+      final backgroundColor = customColor != null
+          ? customColor.withOpacity(isSelected ? 0.9 : 0.75)
+          : Colors.black.withOpacity(isSelected ? 0.85 : 0.7);
+      final textColor =
+          backgroundColor.computeLuminance() > 0.6 ? Colors.black : Colors.white;
+      markers.add(
+        Marker(
+          point: centroid,
+          width: 220,
+          height: 60,
+          alignment: Alignment.center,
+          builder: (context) {
+            final theme = Theme.of(context);
+            final textStyle = theme.textTheme.labelMedium?.copyWith(
+                  color: textColor,
+                  fontWeight: FontWeight.w600,
+                ) ??
+                TextStyle(
+                  color: textColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                );
+            return IgnorePointer(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 180),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: backgroundColor,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.85),
+                        width: 1,
+                      ),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 6,
+                          offset: Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      child: Text(
+                        label,
+                        textAlign: TextAlign.center,
+                        style: textStyle,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      );
+    }
+    return markers;
+  }
+
+  List<Marker> _buildDraftPolygonMarkers() {
+    return List<Marker>.generate(
+      _draftPolygonPoints.length,
+      (index) {
+        final point = _draftPolygonPoints[index];
+        return Marker(
+          point: point,
+          width: 36,
+          height: 36,
+          alignment: Alignment.center,
+          builder: (context) {
+            final theme = Theme.of(context);
+            final textStyle = theme.textTheme.labelSmall?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ) ??
+                const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                );
+            return IgnorePointer(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.deepOrangeAccent,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                alignment: Alignment.center,
+                child: Text('${index + 1}', style: textStyle),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Marker? _buildCurrentLocationMarker(GeofenceMapController controller) {
@@ -354,6 +570,249 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
           ),
         )
         .toList();
+  }
+
+  void _startPolygonDrawing(GeofenceMapController controller) {
+    if (_isDrawingPolygon) {
+      return;
+    }
+    Scaffold.maybeOf(context)?.closeDrawer();
+    setState(() {
+      _isDrawingPolygon = true;
+      _draftPolygonPoints.clear();
+    });
+    controller.highlightPolygon(null);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('নতুন পলিগন আঁকার জন্য মানচিত্রে পয়েন্ট ট্যাপ করুন।'),
+        duration: Duration(seconds: 4),
+      ),
+    );
+  }
+
+  void _cancelPolygonDrawing() {
+    if (!_isDrawingPolygon) {
+      return;
+    }
+    setState(() {
+      _isDrawingPolygon = false;
+      _draftPolygonPoints.clear();
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('পলিগন আঁকা বাতিল করা হয়েছে।')),
+    );
+  }
+
+  void _undoPolygonPoint() {
+    if (_draftPolygonPoints.isEmpty) {
+      return;
+    }
+    setState(() {
+      _draftPolygonPoints.removeLast();
+    });
+  }
+
+  Future<void> _finishPolygonDrawing(GeofenceMapController controller) async {
+    if (_draftPolygonPoints.length < 3) {
+      return;
+    }
+    final details = await _promptForPolygonDetails();
+    if (!mounted || details == null) {
+      return;
+    }
+
+    final trimmedName = details.name.trim();
+    final displayName =
+        trimmedName.isEmpty ? 'কাস্টম পলিগন' : trimmedName;
+
+    final userPolygon = UserPolygon(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      name: displayName,
+      colorValue: details.color.value,
+      points: List<LatLng>.from(_draftPolygonPoints),
+    );
+
+    await controller.addUserPolygon(userPolygon);
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isDrawingPolygon = false;
+      _draftPolygonPoints.clear();
+    });
+
+    final targetId = 'user_${userPolygon.id}';
+    PolygonFeature? createdFeature;
+    for (final polygon in controller.polygons) {
+      if (polygon.id == targetId) {
+        createdFeature = polygon;
+        break;
+      }
+    }
+
+    if (createdFeature != null) {
+      controller.highlightPolygon(createdFeature);
+      final centroid = polygonCentroid(createdFeature);
+      if (centroid != null) {
+        controller.moveMap(centroid, 16);
+      }
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('"$displayName" পলিগন সংরক্ষণ করা হয়েছে।')),
+    );
+  }
+
+  Future<_NewPolygonDetails?> _promptForPolygonDetails() async {
+    final nameController = TextEditingController();
+    Color selectedColor = _polygonColorOptions.first.color;
+    try {
+      return showDialog<_NewPolygonDetails>(
+        context: context,
+        builder: (context) {
+          return StatefulBuilder(
+            builder: (context, setState) {
+              final theme = Theme.of(context);
+              return AlertDialog(
+                title: const Text('পলিগনের বিস্তারিত'),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextField(
+                        controller: nameController,
+                        decoration: const InputDecoration(
+                          labelText: 'নাম',
+                          hintText: 'পলিগনের নাম লিখুন',
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'রং নির্বাচন করুন',
+                        style: theme.textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 16,
+                        runSpacing: 16,
+                        children: [
+                          for (final option in _polygonColorOptions)
+                            Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () => setState(
+                                  () => selectedColor = option.color,
+                                ),
+                                borderRadius: BorderRadius.circular(28),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                  ),
+                                  child: _PolygonColorPreview(
+                                    color: option.color,
+                                    label: option.label,
+                                    selected: selectedColor == option.color,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('বাতিল'),
+                  ),
+                  FilledButton(
+                    onPressed: () {
+                      Navigator.of(context).pop(
+                        _NewPolygonDetails(
+                          name: nameController.text,
+                          color: selectedColor,
+                        ),
+                      );
+                    },
+                    child: const Text('সংরক্ষণ করুন'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      nameController.dispose();
+    }
+  }
+
+  Widget _buildPolygonDrawingOverlay(
+    GeofenceMapController controller,
+    int pointCount,
+  ) {
+    final theme = Theme.of(context);
+    final instructionText = pointCount >= 3
+        ? 'সংরক্ষণ করতে "সংরক্ষণ করুন" চাপুন।'
+        : 'কমপক্ষে ৩টি পয়েন্ট প্রয়োজন।';
+    return Positioned(
+      left: 16,
+      right: 16,
+      bottom: 16,
+      child: Material(
+        elevation: 10,
+        borderRadius: BorderRadius.circular(18),
+        color: theme.colorScheme.surface.withOpacity(0.95),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'নতুন পলিগন আঁকা হচ্ছে',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'মানচিত্রে ট্যাপ করে পয়েন্ট যোগ করুন। $instructionText',
+                style: theme.textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.end,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: pointCount > 0 ? _undoPolygonPoint : null,
+                    icon: const Icon(Icons.undo),
+                    label: const Text('আনডু'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _cancelPolygonDrawing,
+                    icon: const Icon(Icons.close),
+                    label: const Text('বাতিল'),
+                  ),
+                  FilledButton.icon(
+                    onPressed: pointCount >= 3
+                        ? () => _finishPolygonDrawing(controller)
+                        : null,
+                    icon: const Icon(Icons.check),
+                    label: const Text('সংরক্ষণ করুন'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _toggleTracking(GeofenceMapController controller) async {
@@ -724,6 +1183,7 @@ class _MapSidebar extends StatelessWidget {
     required this.controller,
     required this.isTracking,
     required this.onAddPlace,
+    required this.onAddPolygon,
     required this.onToggleTracking,
     required this.onCalibrate,
     required this.onShowLayerSelector,
@@ -737,6 +1197,7 @@ class _MapSidebar extends StatelessWidget {
   final GeofenceMapController controller;
   final bool isTracking;
   final VoidCallback onAddPlace;
+  final VoidCallback onAddPolygon;
   final VoidCallback? onToggleTracking;
   final VoidCallback? onCalibrate;
   final VoidCallback onShowLayerSelector;
@@ -746,11 +1207,13 @@ class _MapSidebar extends StatelessWidget {
   final ValueChanged<bool> onToggleBoundary;
   final ValueChanged<bool> onToggleOtherPolygons;
 
-  static const List<String> _informationButtons = <String>[
-    'বালুমহাল সমূহ',
+  static const List<String> _balumohalInformationItems = <String>[
     'ড্রেজারের লোকেশন',
     'হাইড্রোগ্রাফিক জরিপ',
     'ইজারা সংক্রান্ত বিজ্ঞপ্তি',
+  ];
+
+  static const List<String> _otherInformationButtons = <String>[
     'জলমহাল সমূহ',
   ];
 
@@ -764,6 +1227,11 @@ class _MapSidebar extends StatelessWidget {
         onPressed: onAddPlace,
         icon: const Icon(Icons.add_location_alt),
         label: const Text('নতুন স্থান যুক্ত করুন'),
+      ),
+      FilledButton.icon(
+        onPressed: onAddPolygon,
+        icon: const Icon(Icons.format_shapes),
+        label: const Text('নতুন পলিগন আঁকুন'),
       ),
       FilledButton.icon(
         onPressed: onToggleTracking,
@@ -833,11 +1301,19 @@ class _MapSidebar extends StatelessWidget {
                   const SizedBox(height: 16),
                   Text('তথ্য সেবা', style: theme.textTheme.titleMedium),
                   const SizedBox(height: 8),
-                  for (int i = 0; i < _informationButtons.length; i++) ...[
+                  _CollapsibleInformationButton(
+                    title: 'বালুমহাল সমূহ',
+                    items: _balumohalInformationItems,
+                  ),
+                  const SizedBox(height: 8),
+                  for (int i = 0; i < _otherInformationButtons.length; i++) ...[
                     if (i != 0) const SizedBox(height: 8),
                     FilledButton.tonal(
                       onPressed: () {},
-                      child: Text(_informationButtons[i]),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(_otherInformationButtons[i]),
+                      ),
                     ),
                   ],
                   const SizedBox(height: 16),
@@ -932,6 +1408,106 @@ class _MapSidebar extends StatelessWidget {
 
   String _formatMouzaName(String value) {
     return value.replaceAll('_', ' ');
+  }
+}
+
+class _CollapsibleInformationButton extends StatelessWidget {
+  const _CollapsibleInformationButton({
+    required this.title,
+    required this.items,
+  });
+
+  final String title;
+  final List<String> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Theme(
+      data: theme.copyWith(dividerColor: Colors.transparent),
+      child: Container(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.primary.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: theme.colorScheme.outlineVariant),
+        ),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          iconColor: theme.colorScheme.primary,
+          collapsedIconColor: theme.colorScheme.primary,
+          title: Text(
+            title,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          children: [
+            for (int i = 0; i < items.length; i++)
+              Padding(
+                padding: EdgeInsets.only(top: i == 0 ? 8 : 12),
+                child: FilledButton.tonal(
+                  onPressed: () {},
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(items[i]),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PolygonColorPreview extends StatelessWidget {
+  const _PolygonColorPreview({
+    required this.color,
+    required this.label,
+    required this.selected,
+  });
+
+  final Color color;
+  final String label;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final double size = selected ? 48 : 44;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: selected
+                  ? theme.colorScheme.onSurface.withOpacity(0.9)
+                  : Colors.white,
+              width: selected ? 3 : 2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(selected ? 0.45 : 0.3),
+                blurRadius: selected ? 10 : 6,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          style: theme.textTheme.labelSmall,
+        ),
+      ],
+    );
   }
 }
 
