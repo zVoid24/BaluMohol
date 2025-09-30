@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 
-import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import 'package:balumohol/features/geofence/models/polygon_feature.dart';
@@ -210,11 +209,11 @@ double distanceToPolygon(LatLng point, PolygonFeature polygon) {
 
 double _distanceToSegment(LatLng point, LatLng start, LatLng end) {
   if (start == end) {
-    return Geolocator.distanceBetween(
-      point.latitude,
-      point.longitude,
-      start.latitude,
-      start.longitude,
+    return distanceBetweenCoordinates(
+      startLatitude: point.latitude,
+      startLongitude: point.longitude,
+      endLatitude: start.latitude,
+      endLongitude: start.longitude,
     );
   }
 
@@ -254,6 +253,29 @@ double _distanceToSegment(LatLng point, LatLng start, LatLng end) {
   final dy = p.y - closest.y;
   return math.sqrt(dx * dx + dy * dy);
 }
+
+double distanceBetweenCoordinates({
+  required double startLatitude,
+  required double startLongitude,
+  required double endLatitude,
+  required double endLongitude,
+}) {
+  const earthRadius = 6378137.0; // in meters
+  final dLat = _toRadians(endLatitude - startLatitude);
+  final dLon = _toRadians(endLongitude - startLongitude);
+
+  final startLatRad = _toRadians(startLatitude);
+  final endLatRad = _toRadians(endLatitude);
+
+  final a = math.pow(math.sin(dLat / 2), 2) +
+      math.cos(startLatRad) *
+          math.cos(endLatRad) *
+          math.pow(math.sin(dLon / 2), 2);
+  final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+  return earthRadius * c;
+}
+
+double _toRadians(double degrees) => degrees * math.pi / 180;
 
 LatLng? _centroidOfRing(List<LatLng> ring) {
   if (ring.isEmpty) {
