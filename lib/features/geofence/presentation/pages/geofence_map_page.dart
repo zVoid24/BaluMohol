@@ -746,6 +746,14 @@ class _MapSidebar extends StatelessWidget {
   final ValueChanged<bool> onToggleBoundary;
   final ValueChanged<bool> onToggleOtherPolygons;
 
+  static const List<String> _informationButtons = <String>[
+    'বালুমহাল সমূহ',
+    'ড্রেজারের লোকেশন',
+    'হাইড্রোগ্রাফিক জরিপ',
+    'ইজারা সংক্রান্ত বিজ্ঞপ্তি',
+    'জলমহাল সমূহ',
+  ];
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -823,54 +831,89 @@ class _MapSidebar extends StatelessWidget {
                   //   contentPadding: EdgeInsets.zero,
                   // ),
                   const SizedBox(height: 16),
+                  Text('তথ্য সেবা', style: theme.textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  for (int i = 0; i < _informationButtons.length; i++) ...[
+                    if (i != 0) const SizedBox(height: 8),
+                    FilledButton.tonal(
+                      onPressed: () {},
+                      child: Text(_informationButtons[i]),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
                   Text(
                     'মৌজা নির্বাচন করুন',
                     style: theme.textTheme.titleMedium,
                   ),
                   const SizedBox(height: 8),
-                  if (mouzas.isEmpty)
-                    const Text('কোনও মৌজা তথ্য পাওয়া যায়নি।')
-                  else ...[
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+                  Theme(
+                    data: theme.copyWith(dividerColor: Colors.transparent),
+                    child: ExpansionTile(
+                      tilePadding: EdgeInsets.zero,
+                      childrenPadding: EdgeInsets.zero,
+                      title: const Text('মৌজা'),
                       children: [
-                        OutlinedButton.icon(
-                          onPressed: selectedMouzas.length == mouzas.length
-                              ? null
-                              : onSelectAllMouzas,
-                          icon: const Icon(Icons.select_all),
-                          label: const Text('সব নির্বাচন করুন'),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: selectedMouzas.isEmpty
-                              ? null
-                              : onClearMouzas,
-                          icon: const Icon(Icons.clear_all),
-                          label: const Text('সব অপসারণ করুন'),
-                        ),
+                        if (mouzas.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.only(bottom: 12),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text('কোনও মৌজা তথ্য পাওয়া যায়নি।'),
+                            ),
+                          )
+                        else
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    OutlinedButton.icon(
+                                      onPressed: selectedMouzas.length ==
+                                              mouzas.length
+                                          ? null
+                                          : onSelectAllMouzas,
+                                      icon: const Icon(Icons.select_all),
+                                      label: const Text('সব নির্বাচন করুন'),
+                                    ),
+                                    OutlinedButton.icon(
+                                      onPressed: selectedMouzas.isEmpty
+                                          ? null
+                                          : onClearMouzas,
+                                      icon: const Icon(Icons.clear_all),
+                                      label: const Text('সব অপসারণ করুন'),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                ...mouzas.map(
+                                  (mouza) => CheckboxListTile(
+                                    value: selectedMouzas.contains(mouza),
+                                    title: Text(_formatMouzaName(mouza)),
+                                    dense: true,
+                                    controlAffinity:
+                                        ListTileControlAffinity.leading,
+                                    contentPadding: EdgeInsets.zero,
+                                    onChanged: (checked) {
+                                      final next = selectedMouzas.toSet();
+                                      if (checked ?? false) {
+                                        next.add(mouza);
+                                      } else {
+                                        next.remove(mouza);
+                                      }
+                                      onMouzaSelectionChanged(next);
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    ...mouzas.map(
-                      (mouza) => CheckboxListTile(
-                        value: selectedMouzas.contains(mouza),
-                        title: Text(_formatMouzaName(mouza)),
-                        dense: true,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        contentPadding: EdgeInsets.zero,
-                        onChanged: (checked) {
-                          final next = selectedMouzas.toSet();
-                          if (checked ?? false) {
-                            next.add(mouza);
-                          } else {
-                            next.remove(mouza);
-                          }
-                          onMouzaSelectionChanged(next);
-                        },
-                      ),
-                    ),
-                  ],
+                  ),
                 ],
               ),
             ),
