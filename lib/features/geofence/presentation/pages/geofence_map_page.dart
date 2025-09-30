@@ -421,53 +421,55 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
           width: 220,
           height: 60,
           alignment: Alignment.center,
-          builder: (context) {
-            final theme = Theme.of(context);
-            final textStyle = theme.textTheme.labelMedium?.copyWith(
-                  color: textColor,
-                  fontWeight: FontWeight.w600,
-                ) ??
-                TextStyle(
-                  color: textColor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                );
-            return IgnorePointer(
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 180),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: backgroundColor,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.85),
-                        width: 1,
-                      ),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Colors.black26,
-                          blurRadius: 6,
-                          offset: Offset(0, 3),
+          child: Builder(
+            builder: (context) {
+              final theme = Theme.of(context);
+              final textStyle = theme.textTheme.labelMedium?.copyWith(
+                    color: textColor,
+                    fontWeight: FontWeight.w600,
+                  ) ??
+                  TextStyle(
+                    color: textColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  );
+              return IgnorePointer(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 180),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: backgroundColor,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.85),
+                          width: 1,
                         ),
-                      ],
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Colors.black26,
+                            blurRadius: 6,
+                            offset: Offset(0, 3),
+                          ),
+                        ],
                       ),
-                      child: Text(
-                        label,
-                        textAlign: TextAlign.center,
-                        style: textStyle,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        child: Text(
+                          label,
+                          textAlign: TextAlign.center,
+                          style: textStyle,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       );
     }
@@ -484,35 +486,37 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
           width: 36,
           height: 36,
           alignment: Alignment.center,
-          builder: (context) {
-            final theme = Theme.of(context);
-            final textStyle = theme.textTheme.labelSmall?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ) ??
-                const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                );
-            return IgnorePointer(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.deepOrangeAccent,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Colors.black26,
-                      blurRadius: 4,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
+          child: Builder(
+            builder: (context) {
+              final theme = Theme.of(context);
+              final textStyle = theme.textTheme.labelSmall?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ) ??
+                  const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  );
+              return IgnorePointer(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.deepOrangeAccent,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black26,
+                        blurRadius: 4,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  alignment: Alignment.center,
+                  child: Text('${index + 1}', style: textStyle),
                 ),
-                alignment: Alignment.center,
-                child: Text('${index + 1}', style: textStyle),
-              ),
-            );
-          },
+              );
+            },
+          ),
         );
       },
     );
