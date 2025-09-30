@@ -8,8 +8,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:balumohol/core/location/location_service.dart';
+import 'package:balumohol/core/storage/preferences_service.dart';
 import 'package:balumohol/core/utils/formatting.dart';
 import 'package:balumohol/features/geofence/constants.dart';
 import 'package:balumohol/features/geofence/models/custom_place.dart';
@@ -21,7 +22,11 @@ import 'package:balumohol/features/geofence/models/user_polygon.dart';
 import 'package:balumohol/features/geofence/utils/geo_utils.dart';
 
 class GeofenceMapController extends ChangeNotifier {
-  GeofenceMapController();
+  GeofenceMapController({
+    required LocationService locationService,
+    required PreferencesService preferencesService,
+  })  : _locationService = locationService,
+        _preferences = preferencesService;
 
   void _refreshVisiblePolygons({bool notify = true}) {
     _visiblePolygons
@@ -86,7 +91,8 @@ class GeofenceMapController extends ChangeNotifier {
   PolygonFeature? _primaryPolygon;
   LatLng? _primaryCenter;
 
-  SharedPreferences? _prefs;
+  final LocationService _locationService;
+  final PreferencesService _preferences;
   StreamSubscription<Position>? _positionSubscription;
   Timer? _historyTimer;
 
@@ -95,7 +101,7 @@ class GeofenceMapController extends ChangeNotifier {
   Future<void> initialize() async {
     if (_initialised) return;
     _initialised = true;
-    _prefs = await SharedPreferences.getInstance();
+    await _preferences.init();
     await _loadGeoJsonBoundary();
     await _loadHistory();
     await _loadCustomPlaces();
@@ -207,7 +213,7 @@ class GeofenceMapController extends ChangeNotifier {
     _notifySafely();
 
     try {
-      final position = await Geolocator.getCurrentPosition(
+      final position = await _locationService.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.best,
         timeLimit: const Duration(seconds: 20),
       );
@@ -543,7 +549,7 @@ class GeofenceMapController extends ChangeNotifier {
   }
 
   Future<void> _loadHistory() async {
-    final stored = _prefs?.getString(historyStorageKey);
+    final stored = _preferences.getString(historyStorageKey);
     if (stored == null) return;
     try {
       final decoded = json.decode(stored) as List<dynamic>;
@@ -567,7 +573,7 @@ class GeofenceMapController extends ChangeNotifier {
   }
 
   Future<void> _loadCustomPlaces() async {
-    final stored = _prefs?.getString(customPlacesStorageKey);
+    final stored = _preferences.getString(customPlacesStorageKey);
     if (stored == null) return;
     try {
       final decoded = json.decode(stored) as List<dynamic>;
@@ -585,7 +591,7 @@ class GeofenceMapController extends ChangeNotifier {
   }
 
   Future<void> _loadUserPolygons() async {
-    final stored = _prefs?.getString(userPolygonsStorageKey);
+    final stored = _preferences.getString(userPolygonsStorageKey);
     if (stored == null) return;
     try {
       final decoded = json.decode(stored) as List<dynamic>;
@@ -605,21 +611,21 @@ class GeofenceMapController extends ChangeNotifier {
 
   Future<void> _persistHistory() async {
     final encoded = json.encode(_history.map((e) => e.toJson()).toList());
-    await _prefs?.setString(historyStorageKey, encoded);
+    await _preferences.setString(historyStorageKey, encoded);
   }
 
   Future<void> _persistCustomPlaces() async {
     final encoded = json.encode(
       _customPlaces.map((place) => place.toJson()).toList(),
     );
-    await _prefs?.setString(customPlacesStorageKey, encoded);
+    await _preferences.setString(customPlacesStorageKey, encoded);
   }
 
   Future<void> _persistUserPolygons() async {
     final encoded = json.encode(
       _userPolygons.map((polygon) => polygon.toJson()).toList(),
     );
-    await _prefs?.setString(userPolygonsStorageKey, encoded);
+    await _preferences.setString(userPolygonsStorageKey, encoded);
   }
 
   PolygonFeature? _findCentralPolygon(
@@ -638,11 +644,11 @@ class GeofenceMapController extends ChangeNotifier {
         if (polygon.outer.isEmpty) continue;
         final centroid = polygonCentroid(polygon);
         if (centroid == null) continue;
-        final distance = Geolocator.distanceBetween(
-          overallCenter.latitude,
-          overallCenter.longitude,
-          centroid.latitude,
-          centroid.longitude,
+        final distance = distanceBetweenCoordinates(
+          startLatitude: overallCenter.latitude,
+          startLongitude: overallCenter.longitude,
+          endLatitude: centroid.latitude,
+          endLongitude: centroid.longitude,
         );
         if (distance < closestDistance) {
           closestDistance = distance;
@@ -735,18 +741,18 @@ class GeofenceMapController extends ChangeNotifier {
     );
 
     _positionSubscription =
-        Geolocator.getPositionStream(locationSettings: settings).listen(
-          _handlePosition,
-          onError: (Object error) {
-            _errorMessage = error.toString();
-            _statusMessage = 'অবস্থান পাওয়ার সময় ত্রুটি ঘটেছে।';
-            _notifySafely();
-          },
-        );
+        _locationService.getPositionStream(settings).listen(
+      _handlePosition,
+      onError: (Object error) {
+        _errorMessage = error.toString();
+        _statusMessage = 'অবস্থান পাওয়ার সময় ত্রুটি ঘটেছে।';
+        _notifySafely();
+      },
+    );
   }
 
   Future<bool> _ensurePermission() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    bool serviceEnabled = await _locationService.isLocationServiceEnabled();
     if (!serviceEnabled) {
       _statusMessage = 'এই ডিভাইসে অবস্থান সেবা বন্ধ আছে।';
       _errorMessage = 'আপনার অবস্থান অনুসরণ করতে অবস্থান সেবা চালু করুন।';
@@ -754,9 +760,9 @@ class GeofenceMapController extends ChangeNotifier {
       return false;
     }
 
-    LocationPermission permission = await Geolocator.checkPermission();
+    LocationPermission permission = await _locationService.checkPermission();
     if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
+      permission = await _locationService.requestPermission();
     }
 
     if (permission == LocationPermission.denied) {
@@ -822,7 +828,7 @@ class GeofenceMapController extends ChangeNotifier {
     } else if (previousLocation != null &&
         (previousLocation.latitude != location.latitude ||
             previousLocation.longitude != location.longitude)) {
-      final bearing = Geolocator.bearingBetween(
+      final bearing = _locationService.bearingBetween(
         previousLocation.latitude,
         previousLocation.longitude,
         location.latitude,
@@ -974,8 +980,6 @@ String? polygonDisplayName(PolygonFeature polygon) {
 
   return _stringValue(polygon.id);
 }
-
-// Removed duplicate GeofenceMapController class definition.
 
 class _PolygonBounds {
   const _PolygonBounds({
