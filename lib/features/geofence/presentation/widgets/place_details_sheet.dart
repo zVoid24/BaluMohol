@@ -48,30 +48,30 @@ class PlaceDetailsSheet extends StatelessWidget {
                   titleStyle: theme.textTheme.titleLarge,
                   textColor: theme.colorScheme.onSurface,
                 ),
-                if (onEdit != null || onDelete != null) ...[
-                  const SizedBox(height: 4),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      if (onEdit != null)
-                        OutlinedButton.icon(
-                          onPressed: onEdit,
-                          icon: const Icon(Icons.edit),
-                          label: const Text('স্থান সম্পাদনা করুন'),
-                        ),
-                      if (onDelete != null)
-                        OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.redAccent,
-                          ),
-                          onPressed: onDelete,
-                          icon: const Icon(Icons.delete_outline),
-                          label: const Text('স্থান মুছে ফেলুন'),
-                        ),
-                    ],
-                  ),
-                ],
+                // if (onEdit != null || onDelete != null) ...[
+                //   const SizedBox(height: 4),
+                //   Wrap(
+                //     spacing: 8,
+                //     runSpacing: 8,
+                //     children: [
+                //       if (onEdit != null)
+                //         OutlinedButton.icon(
+                //           onPressed: onEdit,
+                //           icon: const Icon(Icons.edit),
+                //           label: const Text('স্থান সম্পাদনা করুন'),
+                //         ),
+                //       if (onDelete != null)
+                //         OutlinedButton.icon(
+                //           style: OutlinedButton.styleFrom(
+                //             foregroundColor: Colors.redAccent,
+                //           ),
+                //           onPressed: onDelete,
+                //           icon: const Icon(Icons.delete_outline),
+                //           label: const Text('স্থান মুছে ফেলুন'),
+                //         ),
+                //     ],
+                //   ),
+                // ],
                 if (imageBytes != null) ...[
                   const SizedBox(height: 12),
                   _PlaceImage(imageBytes: imageBytes),
@@ -86,10 +86,7 @@ class PlaceDetailsSheet extends StatelessWidget {
                 ],
                 const SizedBox(height: 12),
                 ...entries.map(
-                  (entry) => _DetailEntry(
-                    entry: entry,
-                    theme: theme,
-                  ),
+                  (entry) => _DetailEntry(entry: entry, theme: theme),
                 ),
               ],
             ),
@@ -155,9 +152,7 @@ class _Header extends StatelessWidget {
 }
 
 class _PlaceImage extends StatelessWidget {
-  const _PlaceImage({
-    required this.imageBytes,
-  });
+  const _PlaceImage({required this.imageBytes});
 
   final Uint8List imageBytes;
 
@@ -190,19 +185,13 @@ class _CategoryLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       category,
-      style: textStyle?.copyWith(
-        color: textColor,
-        fontWeight: FontWeight.w600,
-      ),
+      style: textStyle?.copyWith(color: textColor, fontWeight: FontWeight.w600),
     );
   }
 }
 
 class _DetailEntry extends StatelessWidget {
-  const _DetailEntry({
-    required this.entry,
-    required this.theme,
-  });
+  const _DetailEntry({required this.entry, required this.theme});
 
   final MapEntry<String, String> entry;
   final ThemeData theme;
@@ -222,20 +211,9 @@ class _DetailEntry extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              entry.key,
-              style: labelStyle,
-            ),
-          ),
+          SizedBox(width: 120, child: Text(entry.key, style: labelStyle)),
           const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              entry.value,
-              style: valueStyle,
-            ),
-          ),
+          Expanded(child: Text(entry.value, style: valueStyle)),
         ],
       ),
     );

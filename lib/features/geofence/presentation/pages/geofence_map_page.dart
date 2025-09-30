@@ -815,14 +815,14 @@ class _MapSidebar extends StatelessWidget {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                 children: [
-                  Text('লেয়ার দৃশ্যমানতা', style: theme.textTheme.titleMedium),
-                  SwitchListTile(
-                    value: controller.showBoundary,
-                    onChanged: onToggleBoundary,
-                    title: const Text('শীট বাউন্ডারি দেখান'),
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                  ),
+                  //Text('লেয়ার দৃশ্যমানতা', style: theme.textTheme.titleMedium),
+                  // SwitchListTile(
+                  //   value: controller.showBoundary,
+                  //   onChanged: onToggleBoundary,
+                  //   title: const Text('শীট বাউন্ডারি দেখান'),
+                  //   dense: true,
+                  //   contentPadding: EdgeInsets.zero,
+                  // ),
                   // SwitchListTile(
                   //   value: controller.showOtherPolygons,
                   //   onChanged: onToggleOtherPolygons,
@@ -853,6 +853,13 @@ class _MapSidebar extends StatelessWidget {
                       childrenPadding: EdgeInsets.zero,
                       title: const Text('মৌজা'),
                       children: [
+                        SwitchListTile(
+                          value: controller.showBoundary,
+                          onChanged: onToggleBoundary,
+                          title: const Text('শীট বাউন্ডারি দেখান'),
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                        ),
                         if (mouzas.isEmpty)
                           const Padding(
                             padding: EdgeInsets.only(bottom: 12),
@@ -872,8 +879,8 @@ class _MapSidebar extends StatelessWidget {
                                   runSpacing: 8,
                                   children: [
                                     OutlinedButton.icon(
-                                      onPressed: selectedMouzas.length ==
-                                              mouzas.length
+                                      onPressed:
+                                          selectedMouzas.length == mouzas.length
                                           ? null
                                           : onSelectAllMouzas,
                                       icon: const Icon(Icons.select_all),
