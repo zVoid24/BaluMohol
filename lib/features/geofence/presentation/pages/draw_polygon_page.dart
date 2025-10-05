@@ -79,6 +79,7 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
       name: displayName,
       colorValue: details.color.value,
       points: List<LatLng>.from(_points),
+      fields: details.fields,
     );
 
     if (!mounted) {
@@ -90,6 +91,7 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
 
   Future<_PolygonDetails?> _promptForPolygonDetails() async {
     final nameController = TextEditingController();
+    final editableFields = <_EditablePolygonField>[];
     Color selectedColor = _polygonColorOptions.first.color;
     try {
       return await showDialog<_PolygonDetails>(
@@ -144,6 +146,57 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
                             ),
                         ],
                       ),
+                      const SizedBox(height: 24),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'অতিরিক্ত তথ্য',
+                              style: theme.textTheme.titleSmall,
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'ক্ষেত্র যোগ করুন',
+                            onPressed: () async {
+                              final field = await _showFieldCreationDialog();
+                              if (field != null) {
+                                setState(() => editableFields.add(field));
+                              }
+                            },
+                            icon: const Icon(Icons.add),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      if (editableFields.isEmpty)
+                        Text(
+                          'আপনি অতিরিক্ত কোনো তথ্য যোগ করেননি।',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        )
+                      else
+                        ...editableFields
+                            .asMap()
+                            .entries
+                            .map(
+                              (entry) => Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: _PolygonFieldEditor(
+                                  field: entry.value,
+                                  onRemove: () {
+                                    setState(() {
+                                      final removed = editableFields
+                                          .removeAt(entry.key);
+                                      removed.dispose();
+                                    });
+                                  },
+                                  onDateChanged: (date) =>
+                                      setState(() => entry.value.dateValue = date),
+                                ),
+                              ),
+                            )
+                            .toList(),
                     ],
                   ),
                 ),
@@ -158,10 +211,98 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
                         _PolygonDetails(
                           name: nameController.text,
                           color: selectedColor,
+                          fields: editableFields
+                              .map((field) => field.toUserPolygonField())
+                              .whereType<UserPolygonField>()
+                              .toList(),
                         ),
                       );
                     },
                     child: const Text('সংরক্ষণ করুন'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      nameController.dispose();
+      for (final field in editableFields) {
+        field.dispose();
+      }
+    }
+  }
+
+  Future<_EditablePolygonField?> _showFieldCreationDialog() async {
+    final nameController = TextEditingController();
+    UserPolygonFieldType selectedType = UserPolygonFieldType.text;
+    String? nameError;
+    try {
+      return await showDialog<_EditablePolygonField>(
+        context: context,
+        builder: (context) {
+          return StatefulBuilder(
+            builder: (context, setState) {
+              return AlertDialog(
+                title: const Text('ক্ষেত্র যোগ করুন'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      decoration: InputDecoration(
+                        labelText: 'ক্ষেত্রের নাম',
+                        hintText: 'যেমন: মালিকের নাম',
+                        errorText: nameError,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<UserPolygonFieldType>(
+                      value: selectedType,
+                      decoration: const InputDecoration(
+                        labelText: 'ডেটার ধরন',
+                      ),
+                      items: UserPolygonFieldType.values
+                          .map(
+                            (type) => DropdownMenuItem(
+                              value: type,
+                              child: Text(_fieldTypeLabel(type)),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() {
+                          selectedType = value;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('বাতিল'),
+                  ),
+                  FilledButton(
+                    onPressed: () {
+                      final name = nameController.text.trim();
+                      if (name.isEmpty) {
+                        setState(() {
+                          nameError = 'ক্ষেত্রের নাম লিখুন';
+                        });
+                        return;
+                      }
+                      Navigator.of(context).pop(
+                        _EditablePolygonField(
+                          name: name,
+                          type: selectedType,
+                        ),
+                      );
+                    },
+                    child: const Text('যোগ করুন'),
                   ),
                 ],
               );
@@ -393,10 +534,218 @@ class _InstructionBanner extends StatelessWidget {
 }
 
 class _PolygonDetails {
-  const _PolygonDetails({required this.name, required this.color});
+  const _PolygonDetails({
+    required this.name,
+    required this.color,
+    required this.fields,
+  });
 
   final String name;
   final Color color;
+  final List<UserPolygonField> fields;
+}
+
+class _EditablePolygonField {
+  _EditablePolygonField({
+    required this.name,
+    required this.type,
+  }) : controller = TextEditingController();
+
+  UserPolygonField? toUserPolygonField() {
+    switch (type) {
+      case UserPolygonFieldType.text:
+        final text = controller.text.trim();
+        if (text.isEmpty) return null;
+        return UserPolygonField(name: name, type: type, value: text);
+      case UserPolygonFieldType.number:
+        final text = controller.text.trim();
+        if (text.isEmpty) return null;
+        final parsed = num.tryParse(text);
+        return UserPolygonField(
+          name: name,
+          type: type,
+          value: parsed ?? text,
+        );
+      case UserPolygonFieldType.date:
+        final date = dateValue;
+        if (date == null) return null;
+        return UserPolygonField(name: name, type: type, value: date);
+    }
+  }
+
+  String? get formattedDate {
+    final date = dateValue;
+    if (date == null) return null;
+    final year = date.year.toString().padLeft(4, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '$year-$month-$day';
+  }
+
+  void dispose() {
+    controller.dispose();
+  }
+
+  final String name;
+  final UserPolygonFieldType type;
+  final TextEditingController controller;
+  DateTime? dateValue;
+}
+
+class _PolygonFieldEditor extends StatelessWidget {
+  const _PolygonFieldEditor({
+    required this.field,
+    required this.onRemove,
+    required this.onDateChanged,
+  });
+
+  final _EditablePolygonField field;
+  final VoidCallback onRemove;
+  final ValueChanged<DateTime?> onDateChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final typeLabel = _fieldTypeLabel(field.type);
+    final Widget input;
+    switch (field.type) {
+      case UserPolygonFieldType.text:
+        input = TextField(
+          controller: field.controller,
+          decoration: InputDecoration(
+            labelText: 'মান',
+            hintText: _fieldValueHint(field.type),
+            border: const OutlineInputBorder(),
+          ),
+          textInputAction: TextInputAction.done,
+          textCapitalization: TextCapitalization.sentences,
+        );
+        break;
+      case UserPolygonFieldType.number:
+        input = TextField(
+          controller: field.controller,
+          decoration: InputDecoration(
+            labelText: 'মান',
+            hintText: _fieldValueHint(field.type),
+            border: const OutlineInputBorder(),
+          ),
+          keyboardType: const TextInputType.numberWithOptions(
+            signed: false,
+            decimal: true,
+          ),
+          textInputAction: TextInputAction.done,
+        );
+        break;
+      case UserPolygonFieldType.date:
+        final localizations = MaterialLocalizations.of(context);
+        final label = field.dateValue != null
+            ? localizations.formatMediumDate(field.dateValue!)
+            : _fieldValueHint(field.type);
+        input = Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  final now = DateTime.now();
+                  final initial = field.dateValue ?? now;
+                  final selected = await showDatePicker(
+                    context: context,
+                    initialDate: initial,
+                    firstDate: DateTime(1970),
+                    lastDate: DateTime(now.year + 30),
+                  );
+                  if (selected != null) {
+                    onDateChanged(
+                      DateTime(selected.year, selected.month, selected.day),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.calendar_today_outlined),
+                label: Text(label),
+              ),
+            ),
+            if (field.dateValue != null) ...[
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: 'তারিখ মুছুন',
+                onPressed: () => onDateChanged(null),
+                icon: const Icon(Icons.clear),
+              ),
+            ],
+          ],
+        );
+        break;
+    }
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    field.name,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    typeLabel,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'মুছে ফেলুন',
+                  onPressed: onRemove,
+                  icon: const Icon(Icons.delete_outline),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            input,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _fieldTypeLabel(UserPolygonFieldType type) {
+  switch (type) {
+    case UserPolygonFieldType.text:
+      return 'টেক্সট';
+    case UserPolygonFieldType.number:
+      return 'সংখ্যা';
+    case UserPolygonFieldType.date:
+      return 'তারিখ';
+  }
+}
+
+String _fieldValueHint(UserPolygonFieldType type) {
+  switch (type) {
+    case UserPolygonFieldType.text:
+      return 'তথ্য লিখুন';
+    case UserPolygonFieldType.number:
+      return 'সংখ্যা লিখুন';
+    case UserPolygonFieldType.date:
+      return 'তারিখ নির্বাচন করুন';
+  }
 }
 
 class _PolygonColorOption {
