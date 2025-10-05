@@ -295,54 +295,56 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
                 title: Text(
                   _localizedText(language, 'ক্ষেত্র যোগ করুন', 'Add field'),
                 ),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    TextField(
-                      controller: nameController,
-                      decoration: InputDecoration(
-                        labelText: _localizedText(
-                          language,
-                          'ক্ষেত্রের নাম',
-                          'Field name',
-                        ),
-                        hintText: _localizedText(
-                          language,
-                          'যেমন: মালিকের নাম',
-                          'e.g. Owner name',
-                        ),
-                        errorText: nameError,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<UserPolygonFieldType>(
-                      value: selectedType,
-                      decoration: InputDecoration(
-                        labelText: _localizedText(
-                          language,
-                          'ডেটার ধরন',
-                          'Data type',
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextField(
+                        controller: nameController,
+                        decoration: InputDecoration(
+                          labelText: _localizedText(
+                            language,
+                            'ক্ষেত্রের নাম',
+                            'Field name',
+                          ),
+                          hintText: _localizedText(
+                            language,
+                            'যেমন: মালিকের নাম',
+                            'e.g. Owner name',
+                          ),
+                          errorText: nameError,
                         ),
                       ),
-                      items: UserPolygonFieldType.values
-                          .map(
-                            (type) => DropdownMenuItem(
-                              value: type,
-                              child: Text(
-                                _fieldTypeLabel(type, language),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<UserPolygonFieldType>(
+                        value: selectedType,
+                        decoration: InputDecoration(
+                          labelText: _localizedText(
+                            language,
+                            'ডেটার ধরন',
+                            'Data type',
+                          ),
+                        ),
+                        items: UserPolygonFieldType.values
+                            .map(
+                              (type) => DropdownMenuItem(
+                                value: type,
+                                child: Text(
+                                  _fieldTypeLabel(type, language),
+                                ),
                               ),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        if (value == null) return;
-                        setState(() {
-                          selectedType = value;
-                        });
-                      },
-                    ),
-                  ],
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setState(() {
+                            selectedType = value;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
                 ),
                 actions: [
                   TextButton(
