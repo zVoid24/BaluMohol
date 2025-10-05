@@ -1,3 +1,5 @@
+import 'package:balumohol/core/language/localized_text.dart';
+
 class GeofenceResult {
   const GeofenceResult({
     required this.inside,
@@ -5,5 +7,5 @@ class GeofenceResult {
   });
 
   final bool inside;
-  final String statusMessage;
+  final LocalizedText statusMessage;
 }
