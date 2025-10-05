@@ -111,281 +111,15 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
 
   Future<_PolygonDetails?> _promptForPolygonDetails(
       AppLanguage language) async {
-    final nameController = TextEditingController();
-    final editableFields = <_EditablePolygonField>[];
-    Color selectedColor = _polygonColorOptions.first.color;
-    try {
-      return await showDialog<_PolygonDetails>(
-        context: context,
-        builder: (context) {
-          return StatefulBuilder(
-            builder: (context, setState) {
-              final theme = Theme.of(context);
-              return AlertDialog(
-                title: Text(
-                  _localizedText(language, 'পলিগনের বিস্তারিত', 'Polygon details'),
-                ),
-                content: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      TextField(
-                        controller: nameController,
-                        decoration: InputDecoration(
-                          labelText:
-                              _localizedText(language, 'নাম', 'Name'),
-                          hintText: _localizedText(
-                            language,
-                            'পলিগনের নাম লিখুন',
-                            'Enter polygon name',
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        _localizedText(language, 'রং নির্বাচন করুন', 'Choose a color'),
-                        style: theme.textTheme.titleSmall,
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 16,
-                        runSpacing: 16,
-                        children: [
-                          for (final option in _polygonColorOptions)
-                            Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                onTap: () => setState(
-                                  () => selectedColor = option.color,
-                                ),
-                                borderRadius: BorderRadius.circular(28),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                  ),
-                                  child: _PolygonColorPreview(
-                                    color: option.color,
-                                    label: option.label.resolve(language),
-                                    selected: selectedColor == option.color,
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              _localizedText(
-                                language,
-                                'অতিরিক্ত তথ্য',
-                                'Additional information',
-                              ),
-                              style: theme.textTheme.titleSmall,
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: _localizedText(
-                              language,
-                              'ক্ষেত্র যোগ করুন',
-                              'Add field',
-                            ),
-                            onPressed: () async {
-                              final field =
-                                  await _showFieldCreationDialog(language);
-                              if (field != null) {
-                                setState(() => editableFields.add(field));
-                              }
-                            },
-                            icon: const Icon(Icons.add),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      if (editableFields.isEmpty)
-                        Text(
-                          _localizedText(
-                            language,
-                            'আপনি অতিরিক্ত কোনো তথ্য যোগ করেননি।',
-                            'You have not added any extra information.',
-                          ),
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        )
-                      else
-                        ...editableFields
-                            .asMap()
-                            .entries
-                            .map(
-                              (entry) => Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: _PolygonFieldEditor(
-                                  field: entry.value,
-                                  language: language,
-                                  onRemove: () {
-                                    setState(() {
-                                      final removed = editableFields
-                                          .removeAt(entry.key);
-                                      removed.dispose();
-                                    });
-                                  },
-                                  onDateChanged: (date) =>
-                                      setState(() => entry.value.dateValue = date),
-                                ),
-                              ),
-                            )
-                            .toList(),
-                    ],
-                  ),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: Text(
-                      _localizedText(language, 'বাতিল', 'Cancel'),
-                    ),
-                  ),
-                  FilledButton(
-                    onPressed: () {
-                      Navigator.of(context).pop(
-                        _PolygonDetails(
-                          name: nameController.text,
-                          color: selectedColor,
-                          fields: editableFields
-                              .map((field) => field.toUserPolygonField())
-                              .whereType<UserPolygonField>()
-                              .toList(),
-                        ),
-                      );
-                    },
-                    child: Text(
-                      _localizedText(language, 'সংরক্ষণ করুন', 'Save'),
-                    ),
-                  ),
-                ],
-              );
-            },
-          );
-        },
-      );
-    } finally {
-      nameController.dispose();
-      for (final field in editableFields) {
-        field.dispose();
-      }
-    }
-  }
-
-  Future<_EditablePolygonField?> _showFieldCreationDialog(
-      AppLanguage language) async {
-    final nameController = TextEditingController();
-    UserPolygonFieldType selectedType = UserPolygonFieldType.text;
-    String? nameError;
-    try {
-      return await showDialog<_EditablePolygonField>(
-        context: context,
-        builder: (context) {
-          return StatefulBuilder(
-            builder: (context, setState) {
-              return AlertDialog(
-                title: Text(
-                  _localizedText(language, 'ক্ষেত্র যোগ করুন', 'Add field'),
-                ),
-                content: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      TextField(
-                        controller: nameController,
-                        decoration: InputDecoration(
-                          labelText: _localizedText(
-                            language,
-                            'ক্ষেত্রের নাম',
-                            'Field name',
-                          ),
-                          hintText: _localizedText(
-                            language,
-                            'যেমন: মালিকের নাম',
-                            'e.g. Owner name',
-                          ),
-                          errorText: nameError,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      DropdownButtonFormField<UserPolygonFieldType>(
-                        value: selectedType,
-                        decoration: InputDecoration(
-                          labelText: _localizedText(
-                            language,
-                            'ডেটার ধরন',
-                            'Data type',
-                          ),
-                        ),
-                        items: UserPolygonFieldType.values
-                            .map(
-                              (type) => DropdownMenuItem(
-                                value: type,
-                                child: Text(
-                                  _fieldTypeLabel(type, language),
-                                ),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (value) {
-                          if (value == null) return;
-                          setState(() {
-                            selectedType = value;
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: Text(
-                      _localizedText(language, 'বাতিল', 'Cancel'),
-                    ),
-                  ),
-                  FilledButton(
-                    onPressed: () {
-                      final name = nameController.text.trim();
-                      if (name.isEmpty) {
-                        setState(() {
-                          nameError = _localizedText(
-                            language,
-                            'ক্ষেত্রের নাম লিখুন',
-                            'Enter a field name',
-                          );
-                        });
-                        return;
-                      }
-                      Navigator.of(context).pop(
-                        _EditablePolygonField(
-                          name: name,
-                          type: selectedType,
-                        ),
-                      );
-                    },
-                    child: Text(
-                      _localizedText(language, 'যোগ করুন', 'Add'),
-                    ),
-                  ),
-                ],
-              );
-            },
-          );
-        },
-      );
-    } finally {
-      nameController.dispose();
-    }
+    return showDialog<_PolygonDetails>(
+      context: context,
+      builder: (context) {
+        return _PolygonDetailsDialog(
+          language: language,
+          colorOptions: _polygonColorOptions,
+        );
+      },
+    );
   }
 
   List<Marker> _buildPointMarkers() {
@@ -638,6 +372,298 @@ class _InstructionBanner extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _PolygonDetailsDialog extends StatefulWidget {
+  const _PolygonDetailsDialog({
+    required this.language,
+    required this.colorOptions,
+  });
+
+  final AppLanguage language;
+  final List<_PolygonColorOption> colorOptions;
+
+  @override
+  State<_PolygonDetailsDialog> createState() => _PolygonDetailsDialogState();
+}
+
+class _PolygonDetailsDialogState extends State<_PolygonDetailsDialog> {
+  late final TextEditingController _nameController;
+  late Color _selectedColor;
+  final List<_EditablePolygonField> _editableFields = <_EditablePolygonField>[];
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController();
+    _selectedColor = widget.colorOptions.first.color;
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    for (final field in _editableFields) {
+      field.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _addField() async {
+    final field = await _showFieldCreationDialog(widget.language);
+    if (field == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _editableFields.add(field);
+    });
+  }
+
+  void _removeField(int index) {
+    final removed = _editableFields.removeAt(index);
+    setState(() {});
+    removed.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final language = widget.language;
+    final theme = Theme.of(context);
+    return AlertDialog(
+      title: Text(
+        _localizedText(language, 'পলিগনের বিস্তারিত', 'Polygon details'),
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _nameController,
+              decoration: InputDecoration(
+                labelText: _localizedText(language, 'নাম', 'Name'),
+                hintText: _localizedText(
+                  language,
+                  'পলিগনের নাম লিখুন',
+                  'Enter polygon name',
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _localizedText(language, 'রং নির্বাচন করুন', 'Choose a color'),
+              style: theme.textTheme.titleSmall,
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 16,
+              runSpacing: 16,
+              children: [
+                for (final option in widget.colorOptions)
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => setState(() {
+                        _selectedColor = option.color;
+                      }),
+                      borderRadius: BorderRadius.circular(28),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: _PolygonColorPreview(
+                          color: option.color,
+                          label: option.label.resolve(language),
+                          selected: _selectedColor == option.color,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _localizedText(
+                      language,
+                      'অতিরিক্ত তথ্য',
+                      'Additional information',
+                    ),
+                    style: theme.textTheme.titleSmall,
+                  ),
+                ),
+                IconButton(
+                  tooltip: _localizedText(language, 'ক্ষেত্র যোগ করুন', 'Add field'),
+                  onPressed: _addField,
+                  icon: const Icon(Icons.add),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (_editableFields.isEmpty)
+              Text(
+                _localizedText(
+                  language,
+                  'আপনি অতিরিক্ত কোনো তথ্য যোগ করেননি।',
+                  'You have not added any extra information.',
+                ),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              )
+            else
+              ..._editableFields.asMap().entries.map(
+                (entry) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _PolygonFieldEditor(
+                    field: entry.value,
+                    language: language,
+                    onRemove: () => _removeField(entry.key),
+                    onDateChanged: (date) {
+                      setState(() {
+                        entry.value.dateValue = date;
+                      });
+                    },
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(
+            _localizedText(language, 'বাতিল', 'Cancel'),
+          ),
+        ),
+        FilledButton(
+          onPressed: () {
+            Navigator.of(context).pop(
+              _PolygonDetails(
+                name: _nameController.text,
+                color: _selectedColor,
+                fields: _editableFields
+                    .map((field) => field.toUserPolygonField())
+                    .whereType<UserPolygonField>()
+                    .toList(),
+              ),
+            );
+          },
+          child: Text(
+            _localizedText(language, 'সংরক্ষণ করুন', 'Save'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<_EditablePolygonField?> _showFieldCreationDialog(
+      AppLanguage language) async {
+    final nameController = TextEditingController();
+    UserPolygonFieldType selectedType = UserPolygonFieldType.text;
+    String? nameError;
+    try {
+      return await showDialog<_EditablePolygonField>(
+        context: context,
+        builder: (context) {
+          return StatefulBuilder(
+            builder: (context, setState) {
+              return AlertDialog(
+                title: Text(
+                  _localizedText(language, 'ক্ষেত্র যোগ করুন', 'Add field'),
+                ),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextField(
+                        controller: nameController,
+                        decoration: InputDecoration(
+                          labelText: _localizedText(
+                            language,
+                            'ক্ষেত্রের নাম',
+                            'Field name',
+                          ),
+                          hintText: _localizedText(
+                            language,
+                            'যেমন: মালিকের নাম',
+                            'e.g. Owner name',
+                          ),
+                          errorText: nameError,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<UserPolygonFieldType>(
+                        value: selectedType,
+                        decoration: InputDecoration(
+                          labelText: _localizedText(
+                            language,
+                            'ডেটার ধরন',
+                            'Data type',
+                          ),
+                        ),
+                        items: UserPolygonFieldType.values
+                            .map(
+                              (type) => DropdownMenuItem(
+                                value: type,
+                                child: Text(
+                                  _fieldTypeLabel(type, language),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setState(() {
+                            selectedType = value;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(
+                      _localizedText(language, 'বাতিল', 'Cancel'),
+                    ),
+                  ),
+                  FilledButton(
+                    onPressed: () {
+                      final name = nameController.text.trim();
+                      if (name.isEmpty) {
+                        setState(() {
+                          nameError = _localizedText(
+                            language,
+                            'ক্ষেত্রের নাম লিখুন',
+                            'Enter a field name',
+                          );
+                        });
+                        return;
+                      }
+                      Navigator.of(context).pop(
+                        _EditablePolygonField(
+                          name: name,
+                          type: selectedType,
+                        ),
+                      );
+                    },
+                    child: Text(
+                      _localizedText(language, 'যোগ করুন', 'Add'),
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      nameController.dispose();
+    }
   }
 }
 
