@@ -1021,15 +1021,32 @@ PolygonFeature _userPolygonToFeature(UserPolygon polygon) {
   final displayName = polygon.name.isNotEmpty
       ? polygon.name
       : 'ব্যবহারকারী পলিগন';
+  final properties = <String, dynamic>{
+    'display_name': displayName,
+    'user_color': polygon.colorValue,
+    'layer_type': 'ব্যবহারকারী পলিগন',
+  };
+
+  final usedKeys = properties.keys.toSet();
+  for (final field in polygon.fields) {
+    if (!field.hasContent) continue;
+    var key = field.propertyKey;
+    if (key.isEmpty) continue;
+    var candidate = key;
+    var index = 1;
+    while (usedKeys.contains(candidate)) {
+      index += 1;
+      candidate = '$key ($index)';
+    }
+    properties[candidate] = field.propertyValue;
+    usedKeys.add(candidate);
+  }
+
   return PolygonFeature(
     id: 'user_${polygon.id}',
     outer: polygon.points,
     holes: const [],
-    properties: {
-      'display_name': displayName,
-      'user_color': polygon.colorValue,
-      'layer_type': 'ব্যবহারকারী পলিগন',
-    },
+    properties: properties,
   );
 }
 
