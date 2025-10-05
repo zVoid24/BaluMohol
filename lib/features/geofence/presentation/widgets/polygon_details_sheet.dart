@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'package:provider/provider.dart';
+
+import 'package:balumohol/core/language/language_controller.dart';
 import 'package:balumohol/core/utils/formatting.dart';
 import 'package:balumohol/features/geofence/models/polygon_feature.dart';
 
@@ -13,13 +16,22 @@ class PolygonDetailsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final language = context.watch<LanguageController>().language;
+    final useBanglaDigits = language.isBangla;
     final theme = Theme.of(context);
-    final entries = polygonReadableProperties(polygon);
+    final entries = polygonReadableProperties(
+      polygon,
+      useBanglaDigits: useBanglaDigits,
+      notAvailableLabel:
+          language.isBangla ? 'উপলব্ধ নয়' : 'Not available',
+    );
 
     final plotNumber = polygon.properties['plot_number'];
     final String title = plotNumber != null
-        ? 'প্লট ${formatPropertyValue(plotNumber)}'
-        : 'প্লটের বিবরণ';
+        ? (language.isBangla
+            ? 'প্লট ${formatPropertyValue(plotNumber)}'
+            : 'Plot ${formatPropertyValue(plotNumber, useBanglaDigits: false)}')
+        : (language.isBangla ? 'প্লটের বিবরণ' : 'Plot details');
 
     return DraggableScrollableSheet(
       expand: false,
@@ -49,7 +61,7 @@ class PolygonDetailsSheet extends StatelessWidget {
                       ),
                     ),
                     IconButton(
-                      tooltip: 'Close',
+                      tooltip: language.isBangla ? 'বন্ধ করুন' : 'Close',
                       onPressed: () => Navigator.of(context).pop(),
                       icon: const Icon(Icons.close),
                     ),
