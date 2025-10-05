@@ -183,8 +183,9 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
           )
         : _text(language, 'অপেক্ষা চলছে...', 'Fetching...');
     final bool isTracking = controller.isTracking;
-    final trackingDirectionMarker =
-        isTracking ? _buildTrackingDirectionMarker(controller) : null;
+    final trackingDirectionMarker = isTracking
+        ? _buildTrackingDirectionMarker(controller)
+        : null;
     final statusMessageText = controller.statusMessage.resolve(language);
 
     final VoidCallback? trackingCallback =
@@ -698,7 +699,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
       width: 40,
       height: 40,
       alignment: Alignment.center,
-      builder: (context) => IgnorePointer(
+      child: IgnorePointer(
         child: Transform.rotate(
           angle: angle,
           child: DecoratedBox(
@@ -715,11 +716,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
             ),
             child: const Padding(
               padding: EdgeInsets.all(6),
-              child: Icon(
-                Icons.navigation,
-                color: Colors.blueAccent,
-                size: 22,
-              ),
+              child: Icon(Icons.navigation, color: Colors.blueAccent, size: 22),
             ),
           ),
         ),
@@ -918,8 +915,9 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
                     onChanged: (_) => Navigator.of(context).pop(option),
                     contentPadding: EdgeInsets.zero,
                     title: Text(option.displayName),
-                    subtitle:
-                        Text(_languageOptionSubtitle(currentLanguage, option)),
+                    subtitle: Text(
+                      _languageOptionSubtitle(currentLanguage, option),
+                    ),
                   ),
                 ),
               ],
@@ -1168,10 +1166,7 @@ class _MapSidebar extends StatelessWidget {
   final ValueChanged<bool> onToggleOtherPolygons;
 
   static const List<LocalizedText> _balumohalInformationItems = <LocalizedText>[
-    LocalizedText(
-      bangla: 'ড্রেজারের লোকেশন',
-      english: 'Dredger locations',
-    ),
+    LocalizedText(bangla: 'ড্রেজারের লোকেশন', english: 'Dredger locations'),
     LocalizedText(
       bangla: 'হাইড্রোগ্রাফিক জরিপ',
       english: 'Hydrographic surveys',
@@ -1183,10 +1178,7 @@ class _MapSidebar extends StatelessWidget {
   ];
 
   static const List<LocalizedText> _otherInformationButtons = <LocalizedText>[
-    LocalizedText(
-      bangla: 'জলমহাল সমূহ',
-      english: 'Waterbody resources',
-    ),
+    LocalizedText(bangla: 'জলমহাল সমূহ', english: 'Waterbody resources'),
   ];
 
   @override
