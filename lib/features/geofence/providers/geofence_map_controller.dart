@@ -181,6 +181,19 @@ class GeofenceMapController extends ChangeNotifier {
   void centerOnPrimaryArea() {
     highlightPolygon(null);
 
+    final primaryPolygons =
+        _outputPolygons.where((polygon) => polygon.outer.isNotEmpty).toList();
+    if (primaryPolygons.isNotEmpty) {
+      final bounds = _boundsForPolygons(primaryPolygons);
+      if (bounds != null) {
+        final center =
+            computeBoundsCenter(primaryPolygons) ?? bounds.center;
+        final zoom = (_zoomForBounds(bounds) - 0.6).clamp(5, 18).toDouble();
+        moveMap(center, zoom);
+        return;
+      }
+    }
+
     final targetPolygon = _primaryPolygon;
     if (targetPolygon != null) {
       final bounds = _boundsForPolygon(targetPolygon);
@@ -384,20 +397,29 @@ class GeofenceMapController extends ChangeNotifier {
   }
 
   void _focusOnMouza(String mouzaName, {bool highlight = false}) {
-    final polygon = _findMouzaPolygon(mouzaName);
-    if (polygon != null) {
-      focusPolygon(polygon, highlight: highlight);
+    final matching = _mouzaPolygons
+        .where((polygon) => _mouzaNameForPolygon(polygon) == mouzaName)
+        .toList();
+    if (matching.isEmpty) {
+      return;
     }
-  }
 
-  PolygonFeature? _findMouzaPolygon(String mouzaName) {
-    for (final polygon in _mouzaPolygons) {
-      final name = _mouzaNameForPolygon(polygon);
-      if (name != null && name == mouzaName) {
-        return polygon;
-      }
+    final focusPolygons =
+        matching.where((polygon) => polygon.outer.isNotEmpty).toList();
+    final polygons = focusPolygons.isNotEmpty ? focusPolygons : matching;
+    final bounds = _boundsForPolygons(polygons);
+    if (bounds == null) {
+      return;
     }
-    return null;
+
+    final center = computeBoundsCenter(polygons) ?? bounds.center;
+    if (highlight) {
+      final highlighted = _findCentralPolygon(polygons, center) ?? polygons.first;
+      highlightPolygon(highlighted);
+    }
+
+    final zoom = (_zoomForBounds(bounds) - 0.8).clamp(5, 18).toDouble();
+    moveMap(center, zoom);
   }
 
   PolygonFeature? _firstNonEmptyPolygon(List<PolygonFeature> polygons) {
@@ -696,6 +718,35 @@ class GeofenceMapController extends ChangeNotifier {
       maxLat: maxLat,
       minLng: minLng,
       maxLng: maxLng,
+    );
+  }
+
+  _PolygonBounds? _boundsForPolygons(Iterable<PolygonFeature> polygons) {
+    double? minLat;
+    double? maxLat;
+    double? minLng;
+    double? maxLng;
+
+    for (final polygon in polygons) {
+      final bounds = _boundsForPolygon(polygon);
+      if (bounds == null) {
+        continue;
+      }
+      minLat = minLat == null ? bounds.minLat : math.min(minLat!, bounds.minLat);
+      maxLat = maxLat == null ? bounds.maxLat : math.max(maxLat!, bounds.maxLat);
+      minLng = minLng == null ? bounds.minLng : math.min(minLng!, bounds.minLng);
+      maxLng = maxLng == null ? bounds.maxLng : math.max(maxLng!, bounds.maxLng);
+    }
+
+    if (minLat == null || maxLat == null || minLng == null || maxLng == null) {
+      return null;
+    }
+
+    return _PolygonBounds(
+      minLat: minLat!,
+      maxLat: maxLat!,
+      minLng: minLng!,
+      maxLng: maxLng!,
     );
   }
 

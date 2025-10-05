@@ -125,6 +125,23 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     return language.isBangla ? bangla : english;
   }
 
+  String _languageOptionSubtitle(
+    AppLanguage currentLanguage,
+    AppLanguage option,
+  ) {
+    return option.isBangla
+        ? _text(
+            currentLanguage,
+            'অ্যাপের ভাষা বাংলা করুন',
+            'Switch the app language to Bangla',
+          )
+        : _text(
+            currentLanguage,
+            'অ্যাপের ভাষা ইংরেজি করুন',
+            'Switch the app language to English',
+          );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -306,18 +323,22 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
                       errorMessage: controller.errorMessage,
                     ),
                     const SizedBox(height: 12),
-                    Row(
+                    Column(
                       mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        _LanguageToggle(
-                          language: language,
-                          onChanged: (value) => context
-                              .read<LanguageController>()
-                              .setLanguage(value),
-                        ),
-                        const SizedBox(width: 12),
                         _LayerControlButton(
                           onPressed: () => _showLayerSelector(language),
+                        ),
+                        const SizedBox(height: 12),
+                        _LanguageControlButton(
+                          language: language,
+                          tooltip: _text(
+                            language,
+                            'অ্যাপের ভাষা নির্বাচন করুন',
+                            'Choose app language',
+                          ),
+                          onPressed: () => _showLanguageSelector(language),
                         ),
                       ],
                     ),
@@ -817,6 +838,55 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
         controller.moveMap(updatedPlace.location, defaultFollowZoom);
       }
     }
+  }
+
+  Future<void> _showLanguageSelector(AppLanguage currentLanguage) async {
+    final selected = await showModalBottomSheet<AppLanguage>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        final theme = Theme.of(context);
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  _text(
+                    currentLanguage,
+                    'অ্যাপের ভাষা নির্বাচন করুন',
+                    'Choose app language',
+                  ),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ...AppLanguage.values.map(
+                  (option) => RadioListTile<AppLanguage>(
+                    value: option,
+                    groupValue: currentLanguage,
+                    onChanged: (_) => Navigator.of(context).pop(option),
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(option.displayName),
+                    subtitle:
+                        Text(_languageOptionSubtitle(currentLanguage, option)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (!mounted || selected == null || selected == currentLanguage) {
+      return;
+    }
+
+    context.read<LanguageController>().setLanguage(selected);
   }
 
   Future<void> _showLayerSelector(AppLanguage language) async {
@@ -1345,29 +1415,47 @@ class _CollapsibleInformationButton extends StatelessWidget {
 
 enum _PlaceDetailsAction { edit, delete }
 
-class _LanguageToggle extends StatelessWidget {
-  const _LanguageToggle({required this.language, required this.onChanged});
+class _LanguageControlButton extends StatelessWidget {
+  const _LanguageControlButton({
+    required this.language,
+    required this.tooltip,
+    required this.onPressed,
+  });
 
   final AppLanguage language;
-  final ValueChanged<AppLanguage> onChanged;
+  final String tooltip;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return SegmentedButton<AppLanguage>(
-      segments: AppLanguage.values
-          .map(
-            (lang) => ButtonSegment<AppLanguage>(
-              value: lang,
-              label: Text(lang.displayName),
+    final theme = Theme.of(context);
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        elevation: 4,
+        borderRadius: BorderRadius.circular(20),
+        color: theme.colorScheme.surfaceVariant.withOpacity(0.9),
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.translate, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  language.displayName,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
-          )
-          .toList(),
-      selected: {language},
-      onSelectionChanged: (value) {
-        if (value.isNotEmpty) {
-          onChanged(value.first);
-        }
-      },
+          ),
+        ),
+      ),
     );
   }
 }
