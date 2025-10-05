@@ -7,10 +7,7 @@ import 'package:balumohol/core/utils/formatting.dart';
 import 'package:balumohol/features/geofence/models/polygon_feature.dart';
 
 class PolygonDetailsSheet extends StatelessWidget {
-  const PolygonDetailsSheet({
-    super.key,
-    required this.polygon,
-  });
+  const PolygonDetailsSheet({super.key, required this.polygon});
 
   final PolygonFeature polygon;
 
@@ -21,16 +18,16 @@ class PolygonDetailsSheet extends StatelessWidget {
     final theme = Theme.of(context);
     final entries = polygonReadableProperties(
       polygon,
-      useBanglaDigits: useBanglaDigits,
-      notAvailableLabel:
-          language.isBangla ? 'উপলব্ধ নয়' : 'Not available',
+      //useBanglaDigits: useBanglaDigits,
+      // notAvailableLabel:
+      //     language.isBangla ? 'উপলব্ধ নয়' : 'Not available',
     );
 
     final plotNumber = polygon.properties['plot_number'];
     final String title = plotNumber != null
         ? (language.isBangla
-            ? 'প্লট ${formatPropertyValue(plotNumber)}'
-            : 'Plot ${formatPropertyValue(plotNumber, useBanglaDigits: false)}')
+              ? 'প্লট ${formatPropertyValue(plotNumber)}'
+              : 'Plot ${formatPropertyValue(plotNumber, useBanglaDigits: false)}')
         : (language.isBangla ? 'প্লটের বিবরণ' : 'Plot details');
 
     return DraggableScrollableSheet(

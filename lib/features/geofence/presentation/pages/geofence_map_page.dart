@@ -202,16 +202,22 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
             FloatingActionButton(
               heroTag: 'current_location_btn',
               onPressed: () => _goToCurrentLocation(controller),
-              tooltip:
-                  _text(language, 'বর্তমান অবস্থানে যান', 'Go to current location'),
+              tooltip: _text(
+                language,
+                'বর্তমান অবস্থানে যান',
+                'Go to current location',
+              ),
               child: const Icon(Icons.my_location),
             ),
             const SizedBox(height: 12),
             FloatingActionButton(
               heroTag: 'compass_btn',
               onPressed: controller.resetRotation,
-              tooltip:
-                  _text(language, 'মানচিত্র উত্তরের দিকে ঘোরান', 'Reset north'),
+              tooltip: _text(
+                language,
+                'মানচিত্র উত্তরের দিকে ঘোরান',
+                'Reset north',
+              ),
               child: const Icon(Icons.explore),
             ),
             const SizedBox(height: 12),
@@ -276,8 +282,8 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
               if (customPlaceMarkers.isNotEmpty)
                 MarkerLayer(markers: customPlaceMarkers),
               if (currentMarker != null) MarkerLayer(markers: [currentMarker]),
-              ],
-            ),
+            ],
+          ),
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(12),
@@ -305,12 +311,12 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
                       children: [
                         _LanguageToggle(
                           language: language,
-                          onChanged: (value) =>
-                              context.read<LanguageController>().setLanguage(value),
+                          onChanged: (value) => context
+                              .read<LanguageController>()
+                              .setLanguage(value),
                         ),
                         const SizedBox(width: 12),
                         _LayerControlButton(
-                          label: _text(language, 'মানচিত্র ধরন', 'Map type'),
                           onPressed: () => _showLayerSelector(language),
                         ),
                       ],
@@ -349,10 +355,14 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
 
   List<Polygon> _buildPolygons(GeofenceMapController controller) {
     final selectedId = controller.selectedPolygon?.id;
-    final polygons = controller.polygons
-        .where((polygon) => polygon.outer.isNotEmpty)
-        .toList()
-      ..sort((a, b) => _polygonLayerPriority(a).compareTo(_polygonLayerPriority(b)));
+    final polygons =
+        controller.polygons
+            .where((polygon) => polygon.outer.isNotEmpty)
+            .toList()
+          ..sort(
+            (a, b) =>
+                _polygonLayerPriority(a).compareTo(_polygonLayerPriority(b)),
+          );
 
     return polygons.map((polygon) {
       final bool isSelected = polygon.id == selectedId;
@@ -368,8 +378,9 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
         fillColor = customColor.withOpacity(isSelected ? 0.45 : 0.28);
         borderColor = customColor;
       } else {
-        fillColor =
-            isSelected ? polygonSelectedFillColor : polygonBaseFillColor;
+        fillColor = isSelected
+            ? polygonSelectedFillColor
+            : polygonBaseFillColor;
         borderColor = isSelected
             ? polygonSelectedBorderColor
             : polygonBaseBorderColor;
@@ -440,11 +451,9 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
           child: Builder(
             builder: (context) {
               final theme = Theme.of(context);
-              final baseTextStyle = theme.textTheme.labelMedium ??
-                  const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  );
+              final baseTextStyle =
+                  theme.textTheme.labelMedium ??
+                  const TextStyle(fontSize: 12, fontWeight: FontWeight.w600);
               final textColor = customColor ?? theme.colorScheme.onSurface;
               final textStyle = baseTextStyle.copyWith(
                 color: textColor,
@@ -478,6 +487,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
 
   Marker? _buildCurrentLocationMarker(GeofenceMapController controller) {
     final language = context.read<LanguageController>().language;
+    final useBanglaDigits = language.isBangla;
     final location = controller.currentLocation;
     if (location == null) {
       return null;
@@ -549,7 +559,8 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     Scaffold.maybeOf(context)?.closeDrawer();
     controller.highlightPolygon(null);
 
-    final initialCenter = controller.currentLocation ??
+    final initialCenter =
+        controller.currentLocation ??
         controller.primaryCenter ??
         controller.fallbackCenter;
 
@@ -929,7 +940,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
       builder: (dialogContext) {
         return AlertDialog(
           title: Text(
-            _text('আপনার বর্তমান অবস্থান', 'Your current location'),
+            _text(language, 'আপনার বর্তমান অবস্থান', 'Your current location'),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -937,21 +948,30 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
             children: [
               Text(
                 _text(
+                  language,
                   'অক্ষাংশ: ${formatCoordinate(location.latitude)}',
                   'Latitude: ${formatCoordinate(location.latitude, useBanglaDigits: false)}',
                 ),
               ),
               Text(
                 _text(
+                  language,
                   'দ্রাঘিমাংশ: ${formatCoordinate(location.longitude)}',
                   'Longitude: ${formatCoordinate(location.longitude, useBanglaDigits: false)}',
                 ),
               ),
-              Text(_text('সঠিকতা: $accuracyText', 'Accuracy: $accuracyText')),
+              Text(
+                _text(
+                  language,
+                  'সঠিকতা: $accuracyText',
+                  'Accuracy: $accuracyText',
+                ),
+              ),
               Text(insideText),
               const SizedBox(height: 8),
               Text(
                 _text(
+                  language,
                   'সর্বশেষ আপডেট: ${formatTimestampBangla(DateTime.now().millisecondsSinceEpoch)}',
                   'Last updated: ${formatTimestampLocalized(DateTime.now().millisecondsSinceEpoch, useBanglaDigits: false)}',
                 ),
@@ -961,7 +981,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(_text('বন্ধ করুন', 'Close')),
+              child: Text(_text(language, 'বন্ধ করুন', 'Close')),
             ),
           ],
         );
@@ -1036,9 +1056,7 @@ class _MapSidebar extends StatelessWidget {
     'ইজারা সংক্রান্ত বিজ্ঞপ্তি',
   ];
 
-  static const List<String> _otherInformationButtons = <String>[
-    'জলমহাল সমূহ',
-  ];
+  static const List<String> _otherInformationButtons = <String>['জলমহাল সমূহ'];
 
   @override
   Widget build(BuildContext context) {
@@ -1163,7 +1181,9 @@ class _MapSidebar extends StatelessWidget {
                         SwitchListTile(
                           value: controller.showBoundary,
                           onChanged: onToggleBoundary,
-                          title: Text(_text('শীট বাউন্ডারি দেখান', 'Show sheet boundary')),
+                          title: Text(
+                            _text('শীট বাউন্ডারি দেখান', 'Show sheet boundary'),
+                          ),
                           dense: true,
                           contentPadding: EdgeInsets.zero,
                         ),
@@ -1173,7 +1193,10 @@ class _MapSidebar extends StatelessWidget {
                             child: Align(
                               alignment: Alignment.centerLeft,
                               child: Text(
-                                _text('কোনও মৌজা তথ্য পাওয়া যায়নি।', 'No mouza data available.'),
+                                _text(
+                                  'কোনও মৌজা তথ্য পাওয়া যায়নি।',
+                                  'No mouza data available.',
+                                ),
                               ),
                             ),
                           )
@@ -1193,14 +1216,21 @@ class _MapSidebar extends StatelessWidget {
                                           ? null
                                           : onSelectAllMouzas,
                                       icon: const Icon(Icons.select_all),
-                                      label: Text(_text('সব নির্বাচন করুন', 'Select all')),
+                                      label: Text(
+                                        _text('সব নির্বাচন করুন', 'Select all'),
+                                      ),
                                     ),
                                     OutlinedButton.icon(
                                       onPressed: selectedMouzas.isEmpty
                                           ? null
                                           : onClearMouzas,
                                       icon: const Icon(Icons.clear_all),
-                                      label: Text(_text('সব অপসারণ করুন', 'Clear selection')),
+                                      label: Text(
+                                        _text(
+                                          'সব অপসারণ করুন',
+                                          'Clear selection',
+                                        ),
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -1240,10 +1270,7 @@ class _MapSidebar extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Image.asset(
-                    'assets/gmgi_logo_trans.png',
-                    height: 28,
-                  ),
+                  Image.asset('assets/gmgi_logo_trans.png', height: 28),
                   const SizedBox(width: 8),
                   Flexible(
                     child: Text(
@@ -1319,10 +1346,7 @@ class _CollapsibleInformationButton extends StatelessWidget {
 enum _PlaceDetailsAction { edit, delete }
 
 class _LanguageToggle extends StatelessWidget {
-  const _LanguageToggle({
-    required this.language,
-    required this.onChanged,
-  });
+  const _LanguageToggle({required this.language, required this.onChanged});
 
   final AppLanguage language;
   final ValueChanged<AppLanguage> onChanged;
@@ -1349,12 +1373,9 @@ class _LanguageToggle extends StatelessWidget {
 }
 
 class _LayerControlButton extends StatelessWidget {
-  const _LayerControlButton({
-    required this.label,
-    required this.onPressed,
-  });
+  const _LayerControlButton({required this.onPressed});
 
-  final String label;
+  //final String label;
   final VoidCallback onPressed;
 
   @override
@@ -1373,8 +1394,6 @@ class _LayerControlButton extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(Icons.layers_outlined, color: theme.colorScheme.primary),
-              const SizedBox(width: 8),
-              Text(label, style: theme.textTheme.labelLarge),
             ],
           ),
         ),
@@ -1401,8 +1420,9 @@ class _LayerOptionTile extends StatelessWidget {
     final theme = Theme.of(context);
     final label = option.label(language);
     final subtitle = option.subtitle(language);
-    final borderColor =
-        selected ? theme.colorScheme.primary : Colors.transparent;
+    final borderColor = selected
+        ? theme.colorScheme.primary
+        : Colors.transparent;
 
     return InkWell(
       onTap: onTap,
@@ -1433,8 +1453,8 @@ class _LayerOptionTile extends StatelessWidget {
                       option.type == _MapLayerType.satellite
                           ? Icons.public
                           : option.type == _MapLayerType.terrain
-                              ? Icons.terrain
-                              : Icons.map,
+                          ? Icons.terrain
+                          : Icons.map,
                       size: 36,
                       color: theme.colorScheme.onSurface.withOpacity(0.7),
                     ),
@@ -1533,7 +1553,10 @@ class _StatusPanel extends StatelessWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            _text('সঠিকতা: $accuracyText', 'Accuracy: $accuracyText'),
+                            _text(
+                              'সঠিকতা: $accuracyText',
+                              'Accuracy: $accuracyText',
+                            ),
                             style: theme.textTheme.bodySmall,
                           ),
                         ],
@@ -1592,7 +1615,12 @@ class _StatusPanel extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Text(_text('সঠিকতা: $accuracyText', 'Accuracy: $accuracyText')),
+                      Text(
+                        _text(
+                          'সঠিকতা: $accuracyText',
+                          'Accuracy: $accuracyText',
+                        ),
+                      ),
                       const SizedBox(height: 4),
                       Text(statusMessage),
                       if (errorMessage != null) ...[

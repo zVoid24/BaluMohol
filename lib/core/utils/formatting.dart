@@ -54,11 +54,7 @@ String formatMeters(
   String? unitLabel,
 }) {
   final resolvedUnit = unitLabel ?? (useBanglaDigits ? 'মিটার' : 'meters');
-  return '${formatNumber(
-    value,
-    fractionDigits: fractionDigits,
-    useBanglaDigits: useBanglaDigits,
-  )} $resolvedUnit';
+  return '${formatNumber(value, fractionDigits: fractionDigits, useBanglaDigits: useBanglaDigits)} $resolvedUnit';
 }
 
 String formatKilometers(
@@ -68,11 +64,7 @@ String formatKilometers(
   String? unitLabel,
 }) {
   final resolvedUnit = unitLabel ?? (useBanglaDigits ? 'কিমি' : 'km');
-  return '${formatNumber(
-    value,
-    fractionDigits: fractionDigits,
-    useBanglaDigits: useBanglaDigits,
-  )} $resolvedUnit';
+  return '${formatNumber(value, fractionDigits: fractionDigits, useBanglaDigits: useBanglaDigits)} $resolvedUnit';
 }
 
 String formatCoordinate(double value, {bool useBanglaDigits = true}) {
@@ -124,8 +116,10 @@ String formatTimestampEnglish(int timestampMs) {
 }
 
 List<MapEntry<String, String>> polygonReadableProperties(
-  PolygonFeature polygon,
-) {
+  PolygonFeature polygon, {
+  bool useBanglaDigits = true,
+  String? notAvailableLabel,
+}) {
   final props = polygon.properties;
   final seen = <String>{};
   final ordered = <MapEntry<String, dynamic>>[];
