@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import 'package:balumohol/core/language/language_controller.dart';
+import 'package:balumohol/core/language/localized_text.dart';
 import 'package:balumohol/core/utils/formatting.dart';
 import 'package:balumohol/features/geofence/constants.dart';
 import 'package:balumohol/features/geofence/models/custom_place.dart';
@@ -182,6 +183,9 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
           )
         : _text(language, 'অপেক্ষা চলছে...', 'Fetching...');
     final bool isTracking = controller.isTracking;
+    final trackingDirectionMarker =
+        isTracking ? _buildTrackingDirectionMarker(controller) : null;
+    final statusMessageText = controller.statusMessage.resolve(language);
 
     final VoidCallback? trackingCallback =
         isTracking || !controller.permissionDenied
@@ -294,6 +298,8 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
                     ),
                   ],
                 ),
+              if (trackingDirectionMarker != null)
+                MarkerLayer(markers: [trackingDirectionMarker]),
               if (historyMarkers.isNotEmpty)
                 MarkerLayer(markers: historyMarkers),
               if (customPlaceMarkers.isNotEmpty)
@@ -319,7 +325,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
                         });
                       },
                       accuracyText: accuracyText,
-                      statusMessage: controller.statusMessage,
+                      statusMessage: statusMessageText,
                       errorMessage: controller.errorMessage,
                     ),
                     const SizedBox(height: 12),
@@ -678,6 +684,47 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
           ),
         )
         .toList();
+  }
+
+  Marker? _buildTrackingDirectionMarker(GeofenceMapController controller) {
+    final point = controller.trackingDirectionPoint;
+    final angle = controller.trackingDirectionRadians;
+    if (point == null || angle == null) {
+      return null;
+    }
+
+    return Marker(
+      point: point,
+      width: 40,
+      height: 40,
+      alignment: Alignment.center,
+      builder: (context) => IgnorePointer(
+        child: Transform.rotate(
+          angle: angle,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: const Padding(
+              padding: EdgeInsets.all(6),
+              child: Icon(
+                Icons.navigation,
+                color: Colors.blueAccent,
+                size: 22,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   double _markerScaleForZoom(double zoom) {
@@ -1120,13 +1167,27 @@ class _MapSidebar extends StatelessWidget {
   final ValueChanged<bool> onToggleBoundary;
   final ValueChanged<bool> onToggleOtherPolygons;
 
-  static const List<String> _balumohalInformationItems = <String>[
-    'ড্রেজারের লোকেশন',
-    'হাইড্রোগ্রাফিক জরিপ',
-    'ইজারা সংক্রান্ত বিজ্ঞপ্তি',
+  static const List<LocalizedText> _balumohalInformationItems = <LocalizedText>[
+    LocalizedText(
+      bangla: 'ড্রেজারের লোকেশন',
+      english: 'Dredger locations',
+    ),
+    LocalizedText(
+      bangla: 'হাইড্রোগ্রাফিক জরিপ',
+      english: 'Hydrographic surveys',
+    ),
+    LocalizedText(
+      bangla: 'ইজারা সংক্রান্ত বিজ্ঞপ্তি',
+      english: 'Lease-related notices',
+    ),
   ];
 
-  static const List<String> _otherInformationButtons = <String>['জলমহাল সমূহ'];
+  static const List<LocalizedText> _otherInformationButtons = <LocalizedText>[
+    LocalizedText(
+      bangla: 'জলমহাল সমূহ',
+      english: 'Waterbody resources',
+    ),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -1218,6 +1279,7 @@ class _MapSidebar extends StatelessWidget {
                   const SizedBox(height: 8),
                   _CollapsibleInformationButton(
                     title: _text('বালুমহাল সমূহ', 'Balu Mohal resources'),
+                    language: language,
                     items: _balumohalInformationItems,
                   ),
                   const SizedBox(height: 8),
@@ -1228,9 +1290,7 @@ class _MapSidebar extends StatelessWidget {
                       child: Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
-                          language.isBangla
-                              ? _otherInformationButtons[i]
-                              : 'Waterbody resources',
+                          _otherInformationButtons[i].resolve(language),
                         ),
                       ),
                     ),
@@ -1366,11 +1426,13 @@ class _MapSidebar extends StatelessWidget {
 class _CollapsibleInformationButton extends StatelessWidget {
   const _CollapsibleInformationButton({
     required this.title,
+    required this.language,
     required this.items,
   });
 
   final String title;
-  final List<String> items;
+  final AppLanguage language;
+  final List<LocalizedText> items;
 
   @override
   Widget build(BuildContext context) {
@@ -1402,7 +1464,7 @@ class _CollapsibleInformationButton extends StatelessWidget {
                   onPressed: () {},
                   child: Align(
                     alignment: Alignment.centerLeft,
-                    child: Text(items[i]),
+                    child: Text(items[i].resolve(language)),
                   ),
                 ),
               ),

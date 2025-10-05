@@ -9,6 +9,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
+import 'package:balumohol/core/language/localized_text.dart';
 import 'package:balumohol/core/location/location_service.dart';
 import 'package:balumohol/core/storage/preferences_service.dart';
 import 'package:balumohol/core/utils/formatting.dart';
@@ -27,6 +28,49 @@ class GeofenceMapController extends ChangeNotifier {
     required PreferencesService preferencesService,
   })  : _locationService = locationService,
         _preferences = preferencesService;
+
+  static const LocalizedText _loadingBoundariesMessage = LocalizedText(
+    bangla: 'সীমানা লোড হচ্ছে...',
+    english: 'Loading boundaries...',
+  );
+  static const LocalizedText _calibratingStatusMessage = LocalizedText(
+    bangla:
+        'ক্যালিব্রেশন চলছে — সামান্য নড়াচড়া করুন এবং জিপিএস স্থিতিশীল হওয়ার জন্য অপেক্ষা করুন...',
+    english:
+        'Calibrating — move slightly and wait for the GPS to stabilize...',
+  );
+  static const LocalizedText _waitingForGpsStatusMessage = LocalizedText(
+    bangla: 'জিপিএস সিগন্যালের জন্য অপেক্ষা করা হচ্ছে...',
+    english: 'Waiting for GPS signal...',
+  );
+  static const LocalizedText _failedToLoadBoundariesStatusMessage =
+      LocalizedText(
+    bangla: 'কার্যালয়ের সীমানা লোড করা যায়নি।',
+    english: 'Failed to load office boundaries.',
+  );
+  static const LocalizedText _locationErrorStatusMessage = LocalizedText(
+    bangla: 'অবস্থান পাওয়ার সময় ত্রুটি ঘটেছে।',
+    english: 'An error occurred while fetching the location.',
+  );
+  static const LocalizedText _locationServicesDisabledStatusMessage =
+      LocalizedText(
+    bangla: 'এই ডিভাইসে অবস্থান সেবা বন্ধ আছে।',
+    english: 'Location services are disabled on this device.',
+  );
+  static const LocalizedText _locationPermissionDeniedStatusMessage =
+      LocalizedText(
+    bangla: 'অবস্থান অনুমতি প্রত্যাখ্যান করা হয়েছে।',
+    english: 'Location permission was denied.',
+  );
+  static const LocalizedText _locationPermissionPermanentlyDeniedStatusMessage =
+      LocalizedText(
+    bangla: 'অবস্থান অনুমতি স্থায়ীভাবে প্রত্যাখ্যান করা হয়েছে।',
+    english: 'Location permission was permanently denied.',
+  );
+  static const LocalizedText _noBoundaryDataStatusMessage = LocalizedText(
+    bangla: 'সীমানার তথ্য পাওয়া যায়নি।',
+    english: 'No boundary information available.',
+  );
 
   void _refreshVisiblePolygons({bool notify = true}) {
     _visiblePolygons
@@ -75,7 +119,7 @@ class GeofenceMapController extends ChangeNotifier {
   double? _currentAccuracy;
   double? _currentHeading;
   bool _insideTarget = false;
-  String _statusMessage = 'সীমানা লোড হচ্ছে...';
+  LocalizedText _statusMessage = _loadingBoundariesMessage;
   String? _errorMessage;
   bool _mapReady = false;
   bool _permissionDenied = false;
@@ -128,13 +172,28 @@ class GeofenceMapController extends ChangeNotifier {
   List<LocationHistoryEntry> get history => List.unmodifiable(_history);
   List<CustomPlace> get customPlaces => List.unmodifiable(_customPlaces);
   List<LatLng> get trackingPath => List.unmodifiable(_trackingPath);
+  LatLng? get trackingDirectionPoint =>
+      _trackingPath.isEmpty ? null : _trackingPath.last;
+  double? get trackingDirectionRadians {
+    if (_trackingPath.length < 2) {
+      return null;
+    }
+    final previous = _trackingPath[_trackingPath.length - 2];
+    final current = _trackingPath.last;
+    final deltaLat = current.latitude - previous.latitude;
+    final deltaLon = current.longitude - previous.longitude;
+    if (deltaLat.abs() < 1e-9 && deltaLon.abs() < 1e-9) {
+      return null;
+    }
+    return math.atan2(deltaLon, deltaLat);
+  }
   List<UserPolygon> get userPolygons => List.unmodifiable(_userPolygons);
 
   LatLng? get currentLocation => _currentLocation;
   double? get currentAccuracy => _currentAccuracy;
   double? get currentHeading => _currentHeading;
   bool get insideTarget => _insideTarget;
-  String get statusMessage => _statusMessage;
+  LocalizedText get statusMessage => _statusMessage;
   String? get errorMessage => _errorMessage;
   bool get permissionDenied => _permissionDenied;
   LatLng get fallbackCenter => _fallbackCenter;
@@ -218,8 +277,7 @@ class GeofenceMapController extends ChangeNotifier {
       return;
     }
 
-    _statusMessage =
-        'ক্যালিব্রেশন চলছে — সামান্য নড়াচড়া করুন এবং জিপিএস স্থিতিশীল হওয়ার জন্য অপেক্ষা করুন...';
+    _statusMessage = _calibratingStatusMessage;
     _hasCenteredOnUser = false;
     _errorMessage = null;
     _samples.clear();
@@ -562,10 +620,10 @@ class GeofenceMapController extends ChangeNotifier {
         _pendingCenter = center;
         _pendingZoom = 16;
       }
-      _statusMessage = 'জিপিএস সিগন্যালের জন্য অপেক্ষা করা হচ্ছে...';
+      _statusMessage = _waitingForGpsStatusMessage;
       _notifySafely();
     } catch (e) {
-      _statusMessage = 'কার্যালয়ের সীমানা লোড করা যায়নি।';
+      _statusMessage = _failedToLoadBoundariesStatusMessage;
       _errorMessage = e.toString();
       _notifySafely();
     }
@@ -797,7 +855,7 @@ class GeofenceMapController extends ChangeNotifier {
       _handlePosition,
       onError: (Object error) {
         _errorMessage = error.toString();
-        _statusMessage = 'অবস্থান পাওয়ার সময় ত্রুটি ঘটেছে।';
+        _statusMessage = _locationErrorStatusMessage;
         _notifySafely();
       },
     );
@@ -806,7 +864,7 @@ class GeofenceMapController extends ChangeNotifier {
   Future<bool> _ensurePermission() async {
     bool serviceEnabled = await _locationService.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      _statusMessage = 'এই ডিভাইসে অবস্থান সেবা বন্ধ আছে।';
+      _statusMessage = _locationServicesDisabledStatusMessage;
       _errorMessage = 'আপনার অবস্থান অনুসরণ করতে অবস্থান সেবা চালু করুন।';
       _notifySafely();
       return false;
@@ -819,7 +877,7 @@ class GeofenceMapController extends ChangeNotifier {
 
     if (permission == LocationPermission.denied) {
       _permissionDenied = true;
-      _statusMessage = 'অবস্থান অনুমতি প্রত্যাখ্যান করা হয়েছে।';
+      _statusMessage = _locationPermissionDeniedStatusMessage;
       _errorMessage = 'জিপিএস ট্র্যাকিং চালু রাখতে অবস্থান অনুমতি দিন।';
       _notifySafely();
       return false;
@@ -827,7 +885,7 @@ class GeofenceMapController extends ChangeNotifier {
 
     if (permission == LocationPermission.deniedForever) {
       _permissionDenied = true;
-      _statusMessage = 'অবস্থান অনুমতি স্থায়ীভাবে প্রত্যাখ্যান করা হয়েছে।';
+      _statusMessage = _locationPermissionPermanentlyDeniedStatusMessage;
       _errorMessage =
           'চালিয়ে যেতে সিস্টেম সেটিংস থেকে অবস্থান অনুমতি সক্রিয় করুন।';
       _notifySafely();
@@ -836,8 +894,8 @@ class GeofenceMapController extends ChangeNotifier {
 
     _permissionDenied = false;
     _errorMessage = null;
-    if (_statusMessage == 'সীমানা লোড হচ্ছে...') {
-      _statusMessage = 'জিপিএস সিগন্যালের জন্য অপেক্ষা করা হচ্ছে...';
+    if (_statusMessage == _loadingBoundariesMessage) {
+      _statusMessage = _waitingForGpsStatusMessage;
     }
     _notifySafely();
     return true;
@@ -906,7 +964,7 @@ class GeofenceMapController extends ChangeNotifier {
     if (_geofencePolygons.isEmpty) {
       return const GeofenceResult(
         inside: false,
-        statusMessage: 'সীমানার তথ্য পাওয়া যায়নি।',
+        statusMessage: _noBoundaryDataStatusMessage,
       );
     }
 
@@ -923,11 +981,17 @@ class GeofenceMapController extends ChangeNotifier {
 
     if (containingPolygon != null) {
       final polygonName = polygonDisplayName(containingPolygon);
-      final locationText =
+      final banglaLocationText =
           polygonName != null ? '$polygonName এলাকায়' : 'নির্ধারিত এলাকায়';
+      final englishLocationText = polygonName != null
+          ? 'the $polygonName area'
+          : 'the designated area';
       return GeofenceResult(
         inside: true,
-        statusMessage: '✅ আপনি $locationText আছেন!',
+        statusMessage: LocalizedText(
+          bangla: '✅ আপনি $banglaLocationText আছেন!',
+          english: '✅ You are within $englishLocationText!',
+        ),
       );
     }
 
@@ -936,7 +1000,11 @@ class GeofenceMapController extends ChangeNotifier {
         : '—';
     return GeofenceResult(
       inside: false,
-      statusMessage: '❌ আপনি নির্ধারিত এলাকায় নেই। দূরত্ব: $distanceText।',
+      statusMessage: LocalizedText(
+        bangla: '❌ আপনি নির্ধারিত এলাকায় নেই। দূরত্ব: $distanceText।',
+        english:
+            '❌ You are outside the designated area. Distance: $distanceText.',
+      ),
     );
   }
 
