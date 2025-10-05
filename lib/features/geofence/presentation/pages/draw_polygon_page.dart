@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 
+import 'package:balumohol/core/language/language_controller.dart';
+import 'package:balumohol/core/language/localized_text.dart';
 import 'package:balumohol/features/geofence/models/user_polygon.dart';
 
 class DrawPolygonPage extends StatefulWidget {
@@ -26,11 +29,26 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
 
   static const List<_PolygonColorOption> _polygonColorOptions =
       <_PolygonColorOption>[
-    _PolygonColorOption('নীল', Color(0xFF1976D2)),
-    _PolygonColorOption('সবুজ', Color(0xFF2E7D32)),
-    _PolygonColorOption('কমলা', Color(0xFFEF6C00)),
-    _PolygonColorOption('বেগুনি', Color(0xFF6A1B9A)),
-    _PolygonColorOption('লাল', Color(0xFFC62828)),
+    _PolygonColorOption(
+      label: LocalizedText(bangla: 'নীল', english: 'Blue'),
+      color: Color(0xFF1976D2),
+    ),
+    _PolygonColorOption(
+      label: LocalizedText(bangla: 'সবুজ', english: 'Green'),
+      color: Color(0xFF2E7D32),
+    ),
+    _PolygonColorOption(
+      label: LocalizedText(bangla: 'কমলা', english: 'Orange'),
+      color: Color(0xFFEF6C00),
+    ),
+    _PolygonColorOption(
+      label: LocalizedText(bangla: 'বেগুনি', english: 'Purple'),
+      color: Color(0xFF6A1B9A),
+    ),
+    _PolygonColorOption(
+      label: LocalizedText(bangla: 'লাল', english: 'Red'),
+      color: Color(0xFFC62828),
+    ),
   ];
 
   @override
@@ -65,14 +83,16 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
       return;
     }
 
-    final details = await _promptForPolygonDetails();
+    final language = context.read<LanguageController>().language;
+    final details = await _promptForPolygonDetails(language);
     if (!mounted || details == null) {
       return;
     }
 
     final trimmedName = details.name.trim();
-    final displayName =
-        trimmedName.isEmpty ? 'কাস্টম পলিগন' : trimmedName;
+    final displayName = trimmedName.isEmpty
+        ? _localizedText(language, 'কাস্টম পলিগন', 'Custom polygon')
+        : trimmedName;
 
     final polygon = UserPolygon(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -89,7 +109,8 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
     Navigator.of(context).pop(polygon);
   }
 
-  Future<_PolygonDetails?> _promptForPolygonDetails() async {
+  Future<_PolygonDetails?> _promptForPolygonDetails(
+      AppLanguage language) async {
     final nameController = TextEditingController();
     final editableFields = <_EditablePolygonField>[];
     Color selectedColor = _polygonColorOptions.first.color;
@@ -101,7 +122,9 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
             builder: (context, setState) {
               final theme = Theme.of(context);
               return AlertDialog(
-                title: const Text('পলিগনের বিস্তারিত'),
+                title: Text(
+                  _localizedText(language, 'পলিগনের বিস্তারিত', 'Polygon details'),
+                ),
                 content: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -109,14 +132,19 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
                     children: [
                       TextField(
                         controller: nameController,
-                        decoration: const InputDecoration(
-                          labelText: 'নাম',
-                          hintText: 'পলিগনের নাম লিখুন',
+                        decoration: InputDecoration(
+                          labelText:
+                              _localizedText(language, 'নাম', 'Name'),
+                          hintText: _localizedText(
+                            language,
+                            'পলিগনের নাম লিখুন',
+                            'Enter polygon name',
+                          ),
                         ),
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'রং নির্বাচন করুন',
+                        _localizedText(language, 'রং নির্বাচন করুন', 'Choose a color'),
                         style: theme.textTheme.titleSmall,
                       ),
                       const SizedBox(height: 12),
@@ -138,7 +166,7 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
                                   ),
                                   child: _PolygonColorPreview(
                                     color: option.color,
-                                    label: option.label,
+                                    label: option.label.resolve(language),
                                     selected: selectedColor == option.color,
                                   ),
                                 ),
@@ -151,14 +179,23 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
                         children: [
                           Expanded(
                             child: Text(
-                              'অতিরিক্ত তথ্য',
+                              _localizedText(
+                                language,
+                                'অতিরিক্ত তথ্য',
+                                'Additional information',
+                              ),
                               style: theme.textTheme.titleSmall,
                             ),
                           ),
                           IconButton(
-                            tooltip: 'ক্ষেত্র যোগ করুন',
+                            tooltip: _localizedText(
+                              language,
+                              'ক্ষেত্র যোগ করুন',
+                              'Add field',
+                            ),
                             onPressed: () async {
-                              final field = await _showFieldCreationDialog();
+                              final field =
+                                  await _showFieldCreationDialog(language);
                               if (field != null) {
                                 setState(() => editableFields.add(field));
                               }
@@ -170,7 +207,11 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
                       const SizedBox(height: 12),
                       if (editableFields.isEmpty)
                         Text(
-                          'আপনি অতিরিক্ত কোনো তথ্য যোগ করেননি।',
+                          _localizedText(
+                            language,
+                            'আপনি অতিরিক্ত কোনো তথ্য যোগ করেননি।',
+                            'You have not added any extra information.',
+                          ),
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
@@ -184,6 +225,7 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
                                 padding: const EdgeInsets.only(bottom: 12),
                                 child: _PolygonFieldEditor(
                                   field: entry.value,
+                                  language: language,
                                   onRemove: () {
                                     setState(() {
                                       final removed = editableFields
@@ -203,7 +245,9 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('বাতিল'),
+                    child: Text(
+                      _localizedText(language, 'বাতিল', 'Cancel'),
+                    ),
                   ),
                   FilledButton(
                     onPressed: () {
@@ -218,7 +262,9 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
                         ),
                       );
                     },
-                    child: const Text('সংরক্ষণ করুন'),
+                    child: Text(
+                      _localizedText(language, 'সংরক্ষণ করুন', 'Save'),
+                    ),
                   ),
                 ],
               );
@@ -234,7 +280,8 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
     }
   }
 
-  Future<_EditablePolygonField?> _showFieldCreationDialog() async {
+  Future<_EditablePolygonField?> _showFieldCreationDialog(
+      AppLanguage language) async {
     final nameController = TextEditingController();
     UserPolygonFieldType selectedType = UserPolygonFieldType.text;
     String? nameError;
@@ -245,7 +292,9 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
           return StatefulBuilder(
             builder: (context, setState) {
               return AlertDialog(
-                title: const Text('ক্ষেত্র যোগ করুন'),
+                title: Text(
+                  _localizedText(language, 'ক্ষেত্র যোগ করুন', 'Add field'),
+                ),
                 content: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -253,22 +302,36 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
                     TextField(
                       controller: nameController,
                       decoration: InputDecoration(
-                        labelText: 'ক্ষেত্রের নাম',
-                        hintText: 'যেমন: মালিকের নাম',
+                        labelText: _localizedText(
+                          language,
+                          'ক্ষেত্রের নাম',
+                          'Field name',
+                        ),
+                        hintText: _localizedText(
+                          language,
+                          'যেমন: মালিকের নাম',
+                          'e.g. Owner name',
+                        ),
                         errorText: nameError,
                       ),
                     ),
                     const SizedBox(height: 16),
                     DropdownButtonFormField<UserPolygonFieldType>(
                       value: selectedType,
-                      decoration: const InputDecoration(
-                        labelText: 'ডেটার ধরন',
+                      decoration: InputDecoration(
+                        labelText: _localizedText(
+                          language,
+                          'ডেটার ধরন',
+                          'Data type',
+                        ),
                       ),
                       items: UserPolygonFieldType.values
                           .map(
                             (type) => DropdownMenuItem(
                               value: type,
-                              child: Text(_fieldTypeLabel(type)),
+                              child: Text(
+                                _fieldTypeLabel(type, language),
+                              ),
                             ),
                           )
                           .toList(),
@@ -284,14 +347,20 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('বাতিল'),
+                    child: Text(
+                      _localizedText(language, 'বাতিল', 'Cancel'),
+                    ),
                   ),
                   FilledButton(
                     onPressed: () {
                       final name = nameController.text.trim();
                       if (name.isEmpty) {
                         setState(() {
-                          nameError = 'ক্ষেত্রের নাম লিখুন';
+                          nameError = _localizedText(
+                            language,
+                            'ক্ষেত্রের নাম লিখুন',
+                            'Enter a field name',
+                          );
                         });
                         return;
                       }
@@ -302,7 +371,9 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
                         ),
                       );
                     },
-                    child: const Text('যোগ করুন'),
+                    child: Text(
+                      _localizedText(language, 'যোগ করুন', 'Add'),
+                    ),
                   ),
                 ],
               );
@@ -364,15 +435,28 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final language = context.watch<LanguageController>().language;
     final pointCount = _points.length;
     final instructionText = pointCount >= 3
-        ? 'সংরক্ষণ করতে "সংরক্ষণ করুন" চাপুন।'
-        : 'কমপক্ষে ৩টি পয়েন্ট প্রয়োজন।';
+        ? _localizedText(
+            language,
+            'সংরক্ষণ করতে "সংরক্ষণ করুন" চাপুন।',
+            'Tap "Save" to store the polygon.',
+          )
+        : _localizedText(
+            language,
+            'কমপক্ষে ৩টি পয়েন্ট প্রয়োজন।',
+            'At least 3 points are required.',
+          );
 
     final pointMarkers = _buildPointMarkers();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('নতুন পলিগন আঁকুন')),
+      appBar: AppBar(
+        title: Text(
+          _localizedText(language, 'নতুন পলিগন আঁকুন', 'Draw new polygon'),
+        ),
+      ),
       body: Column(
         children: [
           Expanded(
@@ -426,7 +510,7 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
                   right: 16,
                   child: Align(
                     alignment: Alignment.topCenter,
-                    child: const _InstructionBanner(),
+                    child: _InstructionBanner(language: language),
                   ),
                 ),
               ],
@@ -446,14 +530,22 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'যোগ করা পয়েন্ট: $pointCount',
+                      _localizedText(
+                        language,
+                        'যোগ করা পয়েন্ট: $pointCount',
+                        'Points added: $pointCount',
+                      ),
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'মানচিত্রে ট্যাপ করে পয়েন্ট যোগ করুন। $instructionText',
+                      _localizedText(
+                        language,
+                        'মানচিত্রে ট্যাপ করে পয়েন্ট যোগ করুন। $instructionText',
+                        'Tap the map to add points. $instructionText',
+                      ),
                       style: theme.textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 16),
@@ -465,7 +557,9 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
                         OutlinedButton.icon(
                           onPressed: pointCount > 0 ? _undoPoint : null,
                           icon: const Icon(Icons.undo),
-                          label: const Text('আনডু'),
+                          label: Text(
+                            _localizedText(language, 'আনডু', 'Undo'),
+                          ),
                         ),
                         OutlinedButton.icon(
                           onPressed: pointCount > 0
@@ -474,18 +568,24 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
                                   })
                               : null,
                           icon: const Icon(Icons.delete_outline),
-                          label: const Text('সব মুছুন'),
+                          label: Text(
+                            _localizedText(language, 'সব মুছুন', 'Clear all'),
+                          ),
                         ),
                         TextButton.icon(
                           onPressed: _cancelDrawing,
                           icon: const Icon(Icons.close),
-                          label: const Text('বাতিল'),
+                          label: Text(
+                            _localizedText(language, 'বাতিল', 'Cancel'),
+                          ),
                         ),
                         FilledButton.icon(
                           onPressed:
                               pointCount >= 3 ? _savePolygon : null,
                           icon: const Icon(Icons.check),
-                          label: const Text('সংরক্ষণ করুন'),
+                          label: Text(
+                            _localizedText(language, 'সংরক্ষণ করুন', 'Save'),
+                          ),
                         ),
                       ],
                     ),
@@ -501,7 +601,9 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
 }
 
 class _InstructionBanner extends StatelessWidget {
-  const _InstructionBanner({super.key});
+  const _InstructionBanner({super.key, required this.language});
+
+  final AppLanguage language;
 
   @override
   Widget build(BuildContext context) {
@@ -520,7 +622,11 @@ class _InstructionBanner extends StatelessWidget {
             const SizedBox(width: 8),
             Flexible(
               child: Text(
-                'মানচিত্রে ট্যাপ করে পয়েন্ট যোগ করুন',
+                _localizedText(
+                  language,
+                  'মানচিত্রে ট্যাপ করে পয়েন্ট যোগ করুন',
+                  'Tap the map to add points',
+                ),
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
@@ -595,26 +701,28 @@ class _EditablePolygonField {
 class _PolygonFieldEditor extends StatelessWidget {
   const _PolygonFieldEditor({
     required this.field,
+    required this.language,
     required this.onRemove,
     required this.onDateChanged,
   });
 
   final _EditablePolygonField field;
+  final AppLanguage language;
   final VoidCallback onRemove;
   final ValueChanged<DateTime?> onDateChanged;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final typeLabel = _fieldTypeLabel(field.type);
+    final typeLabel = _fieldTypeLabel(field.type, language);
     final Widget input;
     switch (field.type) {
       case UserPolygonFieldType.text:
         input = TextField(
           controller: field.controller,
           decoration: InputDecoration(
-            labelText: 'মান',
-            hintText: _fieldValueHint(field.type),
+            labelText: _localizedText(language, 'মান', 'Value'),
+            hintText: _fieldValueHint(field.type, language),
             border: const OutlineInputBorder(),
           ),
           textInputAction: TextInputAction.done,
@@ -625,8 +733,8 @@ class _PolygonFieldEditor extends StatelessWidget {
         input = TextField(
           controller: field.controller,
           decoration: InputDecoration(
-            labelText: 'মান',
-            hintText: _fieldValueHint(field.type),
+            labelText: _localizedText(language, 'মান', 'Value'),
+            hintText: _fieldValueHint(field.type, language),
             border: const OutlineInputBorder(),
           ),
           keyboardType: const TextInputType.numberWithOptions(
@@ -640,7 +748,7 @@ class _PolygonFieldEditor extends StatelessWidget {
         final localizations = MaterialLocalizations.of(context);
         final label = field.dateValue != null
             ? localizations.formatMediumDate(field.dateValue!)
-            : _fieldValueHint(field.type);
+            : _fieldValueHint(field.type, language);
         input = Row(
           children: [
             Expanded(
@@ -667,7 +775,11 @@ class _PolygonFieldEditor extends StatelessWidget {
             if (field.dateValue != null) ...[
               const SizedBox(width: 8),
               IconButton(
-                tooltip: 'তারিখ মুছুন',
+                tooltip: _localizedText(
+                  language,
+                  'তারিখ মুছুন',
+                  'Clear date',
+                ),
                 onPressed: () => onDateChanged(null),
                 icon: const Icon(Icons.clear),
               ),
@@ -711,7 +823,7 @@ class _PolygonFieldEditor extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'মুছে ফেলুন',
+                  tooltip: _localizedText(language, 'মুছে ফেলুন', 'Remove'),
                   onPressed: onRemove,
                   icon: const Icon(Icons.delete_outline),
                 ),
@@ -726,32 +838,32 @@ class _PolygonFieldEditor extends StatelessWidget {
   }
 }
 
-String _fieldTypeLabel(UserPolygonFieldType type) {
+String _fieldTypeLabel(UserPolygonFieldType type, AppLanguage language) {
   switch (type) {
     case UserPolygonFieldType.text:
-      return 'টেক্সট';
+      return _localizedText(language, 'টেক্সট', 'Text');
     case UserPolygonFieldType.number:
-      return 'সংখ্যা';
+      return _localizedText(language, 'সংখ্যা', 'Number');
     case UserPolygonFieldType.date:
-      return 'তারিখ';
+      return _localizedText(language, 'তারিখ', 'Date');
   }
 }
 
-String _fieldValueHint(UserPolygonFieldType type) {
+String _fieldValueHint(UserPolygonFieldType type, AppLanguage language) {
   switch (type) {
     case UserPolygonFieldType.text:
-      return 'তথ্য লিখুন';
+      return _localizedText(language, 'তথ্য লিখুন', 'Enter information');
     case UserPolygonFieldType.number:
-      return 'সংখ্যা লিখুন';
+      return _localizedText(language, 'সংখ্যা লিখুন', 'Enter a number');
     case UserPolygonFieldType.date:
-      return 'তারিখ নির্বাচন করুন';
+      return _localizedText(language, 'তারিখ নির্বাচন করুন', 'Select a date');
   }
 }
 
 class _PolygonColorOption {
-  const _PolygonColorOption(this.label, this.color);
+  const _PolygonColorOption({required this.label, required this.color});
 
-  final String label;
+  final LocalizedText label;
   final Color color;
 }
 
@@ -803,4 +915,12 @@ class _PolygonColorPreview extends StatelessWidget {
       ],
     );
   }
+}
+
+String _localizedText(
+  AppLanguage language,
+  String bangla,
+  String english,
+) {
+  return language.isBangla ? bangla : english;
 }
