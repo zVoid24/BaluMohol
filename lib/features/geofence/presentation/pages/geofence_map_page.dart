@@ -339,7 +339,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
                         ),
                         const SizedBox(height: 12),
                         _LanguageControlButton(
-                          language: language,
+                          //language: language,
                           tooltip: _text(
                             language,
                             'অ্যাপের ভাষা নির্বাচন করুন',
@@ -1471,12 +1471,12 @@ enum _PlaceDetailsAction { edit, delete }
 
 class _LanguageControlButton extends StatelessWidget {
   const _LanguageControlButton({
-    required this.language,
+    //required this.language,
     required this.tooltip,
     required this.onPressed,
   });
 
-  final AppLanguage language;
+  //final AppLanguage language;
   final String tooltip;
   final VoidCallback onPressed;
 
@@ -1498,13 +1498,13 @@ class _LanguageControlButton extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(Icons.translate, color: theme.colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(
-                  language.displayName,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                //const SizedBox(width: 8),
+                // Text(
+                //   language.displayName,
+                //   style: theme.textTheme.bodyMedium?.copyWith(
+                //     fontWeight: FontWeight.w600,
+                //   ),
+                // ),
               ],
             ),
           ),
