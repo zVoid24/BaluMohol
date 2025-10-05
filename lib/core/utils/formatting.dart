@@ -33,31 +33,71 @@ String _trimTrailingZeros(String value) {
   return result;
 }
 
-String formatNumber(num value, {int fractionDigits = 0}) {
+String formatNumber(
+  num value, {
+  int fractionDigits = 0,
+  bool useBanglaDigits = true,
+}) {
   String text;
   if (fractionDigits <= 0) {
     text = value.round().toString();
   } else {
     text = _trimTrailingZeros(value.toStringAsFixed(fractionDigits));
   }
-  return toBanglaDigits(text);
+  return useBanglaDigits ? toBanglaDigits(text) : text;
 }
 
-String formatMeters(num value, {int fractionDigits = 0}) {
-  return '${formatNumber(value, fractionDigits: fractionDigits)} মিটার';
+String formatMeters(
+  num value, {
+  int fractionDigits = 0,
+  bool useBanglaDigits = true,
+  String? unitLabel,
+}) {
+  final resolvedUnit = unitLabel ?? (useBanglaDigits ? 'মিটার' : 'meters');
+  return '${formatNumber(
+    value,
+    fractionDigits: fractionDigits,
+    useBanglaDigits: useBanglaDigits,
+  )} $resolvedUnit';
 }
 
-String formatKilometers(double value, {int fractionDigits = 2}) {
-  return '${formatNumber(value, fractionDigits: fractionDigits)} কিমি';
+String formatKilometers(
+  double value, {
+  int fractionDigits = 2,
+  bool useBanglaDigits = true,
+  String? unitLabel,
+}) {
+  final resolvedUnit = unitLabel ?? (useBanglaDigits ? 'কিমি' : 'km');
+  return '${formatNumber(
+    value,
+    fractionDigits: fractionDigits,
+    useBanglaDigits: useBanglaDigits,
+  )} $resolvedUnit';
 }
 
-String formatCoordinate(double value) {
-  return formatNumber(value, fractionDigits: 6);
+String formatCoordinate(double value, {bool useBanglaDigits = true}) {
+  return formatNumber(
+    value,
+    fractionDigits: 6,
+    useBanglaDigits: useBanglaDigits,
+  );
 }
 
-String formatLatLng(LatLng point, {int fractionDigits = 6}) {
-  final latText = formatNumber(point.latitude, fractionDigits: fractionDigits);
-  final lngText = formatNumber(point.longitude, fractionDigits: fractionDigits);
+String formatLatLng(
+  LatLng point, {
+  int fractionDigits = 6,
+  bool useBanglaDigits = true,
+}) {
+  final latText = formatNumber(
+    point.latitude,
+    fractionDigits: fractionDigits,
+    useBanglaDigits: useBanglaDigits,
+  );
+  final lngText = formatNumber(
+    point.longitude,
+    fractionDigits: fractionDigits,
+    useBanglaDigits: useBanglaDigits,
+  );
   return '$latText, $lngText';
 }
 
@@ -107,7 +147,11 @@ List<MapEntry<String, String>> polygonReadableProperties(
       .map(
         (entry) => MapEntry(
           prettifyPropertyKey(entry.key),
-          formatPropertyValue(entry.value),
+          formatPropertyValue(
+            entry.value,
+            useBanglaDigits: useBanglaDigits,
+            notAvailableLabel: notAvailableLabel,
+          ),
         ),
       )
       .toList();
@@ -140,22 +184,50 @@ String prettifyPropertyKey(String key) {
       .join(' ');
 }
 
-String formatPropertyValue(dynamic value) {
+String formatPropertyValue(
+  dynamic value, {
+  bool useBanglaDigits = true,
+  String? notAvailableLabel,
+}) {
+  final unavailable =
+      notAvailableLabel ?? (useBanglaDigits ? 'উপলব্ধ নয়' : 'Not available');
   if (value == null) {
-    return 'উপলব্ধ নয়';
+    return unavailable;
   }
   if (value is int) {
-    return formatNumber(value, fractionDigits: 0);
+    return formatNumber(
+      value,
+      fractionDigits: 0,
+      useBanglaDigits: useBanglaDigits,
+    );
   }
   if (value is double) {
     final fractionDigits = (value - value.roundToDouble()).abs() < 1e-6 ? 0 : 2;
-    return formatNumber(value, fractionDigits: fractionDigits);
+    return formatNumber(
+      value,
+      fractionDigits: fractionDigits,
+      useBanglaDigits: useBanglaDigits,
+    );
   }
   if (value is num) {
-    return formatNumber(value, fractionDigits: 2);
+    return formatNumber(
+      value,
+      fractionDigits: 2,
+      useBanglaDigits: useBanglaDigits,
+    );
   }
   if (value is String) {
-    return toBanglaDigits(value.trim());
+    final trimmed = value.trim();
+    return useBanglaDigits ? toBanglaDigits(trimmed) : trimmed;
   }
   return value.toString();
+}
+
+String formatTimestampLocalized(
+  int timestampMs, {
+  required bool useBanglaDigits,
+}) {
+  return useBanglaDigits
+      ? formatTimestampBangla(timestampMs)
+      : formatTimestampEnglish(timestampMs);
 }

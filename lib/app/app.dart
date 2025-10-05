@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'package:balumohol/core/language/language_controller.dart';
 import 'package:balumohol/core/location/location_service.dart';
 import 'package:balumohol/core/storage/preferences_service.dart';
 import 'package:balumohol/features/geofence/presentation/pages/geofence_map_page.dart';
@@ -13,6 +14,9 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(
+          create: (_) => LanguageController(),
+        ),
         ChangeNotifierProvider(
           create: (_) => GeofenceMapController(
             locationService: const GeolocatorLocationService(),

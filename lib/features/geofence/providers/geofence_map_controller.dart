@@ -365,8 +365,9 @@ class GeofenceMapController extends ChangeNotifier {
     if (bounds == null) {
       return;
     }
-    final targetZoom = _zoomForBounds(bounds);
-    moveMap(bounds.center, targetZoom);
+    final center = polygonCentroid(polygon) ?? bounds.center;
+    final targetZoom = (_zoomForBounds(bounds) - 0.8).clamp(5, 18).toDouble();
+    moveMap(center, targetZoom);
   }
 
   void focusMouza(String mouzaName) {

@@ -91,3 +91,5 @@ final polygonBaseBorderColor = Colors.blue.shade600;
 final polygonSelectedBorderColor = Colors.orange.shade700;
 final polygonBaseFillColor = const Color(0xFF42A5F5).withOpacity(0.2);
 final polygonSelectedFillColor = const Color(0xFFFFB74D).withOpacity(0.35);
+const Color outputPolygonFillColor = Color(0xFFFFE082);
+const Color outputPolygonBorderColor = Color(0xFFE65100);
