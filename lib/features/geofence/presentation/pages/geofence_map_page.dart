@@ -10,6 +10,7 @@ import 'package:balumohol/features/geofence/constants.dart';
 import 'package:balumohol/features/geofence/models/custom_place.dart';
 import 'package:balumohol/features/geofence/models/location_history_entry.dart';
 import 'package:balumohol/features/geofence/models/polygon_feature.dart';
+import 'package:balumohol/features/geofence/models/polygon_field_template.dart';
 import 'package:balumohol/features/geofence/models/user_polygon.dart';
 import 'package:balumohol/features/geofence/presentation/pages/draw_polygon_page.dart';
 import 'package:balumohol/features/geofence/presentation/widgets/current_location_indicator.dart';
@@ -19,6 +20,10 @@ import 'package:balumohol/features/geofence/presentation/widgets/polygon_details
 import 'package:balumohol/features/geofence/providers/geofence_map_controller.dart';
 import 'package:balumohol/features/geofence/utils/geo_utils.dart';
 import 'package:balumohol/features/places/presentation/pages/add_place_page.dart';
+
+String _localize(AppLanguage language, String bangla, String english) {
+  return language.isBangla ? bangla : english;
+}
 
 class GeofenceMapPage extends StatefulWidget {
   const GeofenceMapPage({super.key});
@@ -592,7 +597,8 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
         controller.primaryCenter ??
         controller.fallbackCenter;
 
-    final userPolygon = await Navigator.of(context).push<UserPolygon>(
+    final creationResult =
+        await Navigator.of(context).push<PolygonCreationResult>(
       MaterialPageRoute(
         builder: (context) => DrawPolygonPage(
           initialCenter: initialCenter,
@@ -602,9 +608,11 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
       ),
     );
 
-    if (!mounted || userPolygon == null) {
+    if (!mounted || creationResult == null) {
       return;
     }
+
+    final userPolygon = creationResult.polygon;
 
     await controller.addUserPolygon(userPolygon);
     if (!mounted) {
@@ -621,6 +629,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     }
 
     final displayName = userPolygon.name;
+    final language = context.read<LanguageController>().language;
     if (createdFeature != null) {
       controller.highlightPolygon(createdFeature);
       final centroid = polygonCentroid(createdFeature);
@@ -629,8 +638,28 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
       }
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('"$displayName" পলিগন সংরক্ষণ করা হয়েছে।')),
+    final templateMessage = await _maybeSaveTemplateFromResult(
+      controller,
+      creationResult.templateDefinitions,
+      displayName,
+      language,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+    final polygonSavedText = language.isBangla
+        ? '"$displayName" পলিগন সংরক্ষণ করা হয়েছে।'
+        : 'Polygon "$displayName" saved.';
+    final messages = <String>[polygonSavedText];
+    if (templateMessage != null) {
+      messages.add(templateMessage);
+    }
+
+    messenger.showSnackBar(
+      SnackBar(content: Text(messages.join('\n'))),
     );
   }
 
@@ -1012,13 +1041,34 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     PolygonFeature polygon,
   ) async {
     controller.highlightPolygon(polygon);
-    await showModalBottomSheet<void>(
+    final userPolygon = controller.userPolygonForFeatureId(polygon.id);
+    final action = await showModalBottomSheet<PolygonDetailsAction>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (context) => PolygonDetailsSheet(polygon: polygon),
+      builder: (context) => PolygonDetailsSheet(
+        polygon: polygon,
+        allowManagement: userPolygon != null,
+      ),
     );
     controller.highlightPolygon(null);
+
+    if (!mounted) {
+      return;
+    }
+
+    if (userPolygon == null || action == null) {
+      return;
+    }
+
+    switch (action) {
+      case PolygonDetailsAction.edit:
+        await _editUserPolygon(controller, userPolygon);
+        break;
+      case PolygonDetailsAction.delete:
+        await _confirmDeleteUserPolygon(controller, userPolygon);
+        break;
+    }
   }
 
   Future<void> _showCurrentLocationDetails(
@@ -1102,6 +1152,217 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
         );
       },
     );
+  }
+
+  Future<void> _editUserPolygon(
+    GeofenceMapController controller,
+    UserPolygon polygon,
+  ) async {
+    final language = context.read<LanguageController>().language;
+    final result = await showDialog<PolygonDetailsResult>(
+      context: context,
+      builder: (context) {
+        return PolygonDetailsFormDialog(
+          language: language,
+          colorOptions: kPolygonColorOptions,
+          templates: controller.polygonTemplates,
+          initialName: polygon.name,
+          initialColor: polygon.color,
+          initialFields: polygon.fields,
+        );
+      },
+    );
+
+    if (!mounted || result == null) {
+      return;
+    }
+
+    final trimmedName = result.name.trim();
+    final displayName = trimmedName.isEmpty
+        ? _text(language, 'কাস্টম পলিগন', 'Custom polygon')
+        : trimmedName;
+
+    final updatedPolygon = UserPolygon(
+      id: polygon.id,
+      name: displayName,
+      colorValue: result.color.value,
+      points: polygon.points,
+      fields: result.fields,
+    );
+
+    await controller.updateUserPolygon(updatedPolygon);
+
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _text(language, 'পলিগন হালনাগাদ হয়েছে।', 'Polygon updated.'),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteUserPolygon(
+    GeofenceMapController controller,
+    UserPolygon polygon,
+  ) async {
+    final language = context.read<LanguageController>().language;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(
+            _text(language, 'পলিগন মুছবেন?', 'Delete polygon?'),
+          ),
+          content: Text(
+            _text(
+              language,
+              '"${polygon.name}" পলিগনটি মুছে ফেলতে চান?',
+              'Remove the polygon "${polygon.name}"?',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(_text(language, 'বাতিল', 'Cancel')),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(dialogContext).colorScheme.error,
+                foregroundColor: Theme.of(dialogContext).colorScheme.onError,
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(_text(language, 'মুছে ফেলুন', 'Delete')),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted || confirm != true) {
+      return;
+    }
+
+    await controller.removeUserPolygon(polygon.id);
+
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _text(language, 'পলিগন মুছে ফেলা হয়েছে।', 'Polygon deleted.'),
+        ),
+      ),
+    );
+  }
+
+  Future<String?> _maybeSaveTemplateFromResult(
+    GeofenceMapController controller,
+    List<PolygonFieldDefinition> definitions,
+    String polygonName,
+    AppLanguage language,
+  ) async {
+    if (definitions.isEmpty) {
+      return null;
+    }
+
+    final exists = controller.polygonTemplates.any(
+      (template) => _definitionsMatch(template.fields, definitions),
+    );
+    if (exists) {
+      return null;
+    }
+
+    final shouldSave = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(
+            _text(language, 'টেমপ্লেট হিসাবে সংরক্ষণ করবেন?', 'Save as template?'),
+          ),
+          content: Text(
+            _text(
+              language,
+              'এই তথ্য সেটকে ভবিষ্যতের জন্য টেমপ্লেট হিসাবে রাখতে চান?',
+              'Would you like to reuse this information layout later as a template?',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(_text(language, 'না', 'No')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(_text(language, 'হ্যাঁ', 'Yes')),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted || shouldSave != true) {
+      return null;
+    }
+
+    final trimmedPolygonName = polygonName.trim();
+    final defaultName = trimmedPolygonName.isNotEmpty
+        ? trimmedPolygonName
+        : _text(language, 'কাস্টম টেমপ্লেট', 'Custom template');
+
+    final templateName = await showDialog<String>(
+      context: context,
+      builder: (context) => _TemplateNameDialog(
+        language: language,
+        initialName: defaultName,
+      ),
+    );
+    if (!mounted || templateName == null) {
+      return null;
+    }
+
+    final template = PolygonFieldTemplate(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      name: templateName,
+      fields: List<PolygonFieldDefinition>.from(definitions),
+    );
+
+    await controller.addPolygonTemplate(template);
+
+    if (!mounted) {
+      return null;
+    }
+
+    return _text(
+      language,
+      'তথ্য টেমপ্লেট সংরক্ষিত হয়েছে।',
+      'Template saved for future polygons.',
+    );
+  }
+
+  bool _definitionsMatch(
+    List<PolygonFieldDefinition> existing,
+    List<PolygonFieldDefinition> candidate,
+  ) {
+    if (existing.length != candidate.length) {
+      return false;
+    }
+    for (var i = 0; i < existing.length; i++) {
+      final a = existing[i];
+      final b = candidate[i];
+      if (a.type != b.type) {
+        return false;
+      }
+      if (a.name.toLowerCase() != b.name.toLowerCase()) {
+        return false;
+      }
+    }
+    return true;
   }
 
   Future<void> _showHistoryEntryDetails(LocationHistoryEntry entry) async {
@@ -1464,6 +1725,87 @@ class _CollapsibleInformationButton extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _TemplateNameDialog extends StatefulWidget {
+  const _TemplateNameDialog({
+    required this.language,
+    required this.initialName,
+  });
+
+  final AppLanguage language;
+  final String initialName;
+
+  @override
+  State<_TemplateNameDialog> createState() => _TemplateNameDialogState();
+}
+
+class _TemplateNameDialogState extends State<_TemplateNameDialog> {
+  late final TextEditingController _controller;
+  String? _errorText;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialName);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final language = widget.language;
+    return AlertDialog(
+      title: Text(
+        _localize(language, 'টেমপ্লেটের নাম দিন', 'Name this template'),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            decoration: InputDecoration(
+              labelText: _localize(language, 'নাম', 'Name'),
+              errorText: _errorText,
+            ),
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _submit(),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(_localize(language, 'বাতিল', 'Cancel')),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: Text(_localize(language, 'সংরক্ষণ করুন', 'Save')),
+        ),
+      ],
+    );
+  }
+
+  void _submit() {
+    final trimmed = _controller.text.trim();
+    if (trimmed.isEmpty) {
+      setState(() {
+        _errorText = _localize(
+          widget.language,
+          'একটি নাম লিখুন',
+          'Please enter a name',
+        );
+      });
+      return;
+    }
+    Navigator.of(context).pop(trimmed);
   }
 }
 

@@ -6,10 +6,17 @@ import 'package:balumohol/core/language/language_controller.dart';
 import 'package:balumohol/core/utils/formatting.dart';
 import 'package:balumohol/features/geofence/models/polygon_feature.dart';
 
+enum PolygonDetailsAction { edit, delete }
+
 class PolygonDetailsSheet extends StatelessWidget {
-  const PolygonDetailsSheet({super.key, required this.polygon});
+  const PolygonDetailsSheet({
+    super.key,
+    required this.polygon,
+    this.allowManagement = false,
+  });
 
   final PolygonFeature polygon;
+  final bool allowManagement;
 
   @override
   Widget build(BuildContext context) {
@@ -65,6 +72,36 @@ class PolygonDetailsSheet extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 12),
+                if (allowManagement)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        FilledButton.tonalIcon(
+                          onPressed: () => Navigator.of(context)
+                              .pop(PolygonDetailsAction.edit),
+                          icon: const Icon(Icons.edit),
+                          label: Text(
+                            language.isBangla ? 'সম্পাদনা করুন' : 'Edit',
+                          ),
+                        ),
+                        FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: theme.colorScheme.error,
+                            foregroundColor: theme.colorScheme.onError,
+                          ),
+                          onPressed: () => Navigator.of(context)
+                              .pop(PolygonDetailsAction.delete),
+                          icon: const Icon(Icons.delete_outline),
+                          label: Text(
+                            language.isBangla ? 'মুছে ফেলুন' : 'Delete',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ...entries.map(
                   (entry) => Padding(
                     padding: const EdgeInsets.symmetric(vertical: 6),

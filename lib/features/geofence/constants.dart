@@ -8,6 +8,7 @@ const Duration sampleRetentionDuration = Duration(seconds: 12);
 const double defaultFollowZoom = 17;
 const String customPlacesStorageKey = 'customPlaces';
 const String userPolygonsStorageKey = 'userPolygons';
+const String userPolygonTemplatesStorageKey = 'userPolygonTemplates';
 
 const List<String> placeCategories = [
   'Restaurant',

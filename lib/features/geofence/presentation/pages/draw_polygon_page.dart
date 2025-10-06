@@ -5,7 +5,9 @@ import 'package:provider/provider.dart';
 
 import 'package:balumohol/core/language/language_controller.dart';
 import 'package:balumohol/core/language/localized_text.dart';
+import 'package:balumohol/features/geofence/models/polygon_field_template.dart';
 import 'package:balumohol/features/geofence/models/user_polygon.dart';
+import 'package:balumohol/features/geofence/providers/geofence_map_controller.dart';
 
 class DrawPolygonPage extends StatefulWidget {
   const DrawPolygonPage({
@@ -23,33 +25,32 @@ class DrawPolygonPage extends StatefulWidget {
   State<DrawPolygonPage> createState() => _DrawPolygonPageState();
 }
 
+const List<PolygonColorOption> kPolygonColorOptions = <PolygonColorOption>[
+  PolygonColorOption(
+    label: LocalizedText(bangla: 'নীল', english: 'Blue'),
+    color: Color(0xFF1976D2),
+  ),
+  PolygonColorOption(
+    label: LocalizedText(bangla: 'সবুজ', english: 'Green'),
+    color: Color(0xFF2E7D32),
+  ),
+  PolygonColorOption(
+    label: LocalizedText(bangla: 'কমলা', english: 'Orange'),
+    color: Color(0xFFEF6C00),
+  ),
+  PolygonColorOption(
+    label: LocalizedText(bangla: 'বেগুনি', english: 'Purple'),
+    color: Color(0xFF6A1B9A),
+  ),
+  PolygonColorOption(
+    label: LocalizedText(bangla: 'লাল', english: 'Red'),
+    color: Color(0xFFC62828),
+  ),
+];
+
 class _DrawPolygonPageState extends State<DrawPolygonPage> {
   final MapController _mapController = MapController();
   final List<LatLng> _points = <LatLng>[];
-
-  static const List<_PolygonColorOption> _polygonColorOptions =
-      <_PolygonColorOption>[
-    _PolygonColorOption(
-      label: LocalizedText(bangla: 'নীল', english: 'Blue'),
-      color: Color(0xFF1976D2),
-    ),
-    _PolygonColorOption(
-      label: LocalizedText(bangla: 'সবুজ', english: 'Green'),
-      color: Color(0xFF2E7D32),
-    ),
-    _PolygonColorOption(
-      label: LocalizedText(bangla: 'কমলা', english: 'Orange'),
-      color: Color(0xFFEF6C00),
-    ),
-    _PolygonColorOption(
-      label: LocalizedText(bangla: 'বেগুনি', english: 'Purple'),
-      color: Color(0xFF6A1B9A),
-    ),
-    _PolygonColorOption(
-      label: LocalizedText(bangla: 'লাল', english: 'Red'),
-      color: Color(0xFFC62828),
-    ),
-  ];
 
   @override
   void initState() {
@@ -94,6 +95,9 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
         ? _localizedText(language, 'কাস্টম পলিগন', 'Custom polygon')
         : trimmedName;
 
+    final templateDefinitions =
+        _templateDefinitionsFromFields(details.fields);
+
     final polygon = UserPolygon(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       name: displayName,
@@ -106,20 +110,42 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
       return;
     }
 
-    Navigator.of(context).pop(polygon);
+    Navigator.of(context).pop(
+      PolygonCreationResult(
+        polygon: polygon,
+        templateDefinitions: templateDefinitions,
+      ),
+    );
   }
 
-  Future<_PolygonDetails?> _promptForPolygonDetails(
+  Future<PolygonDetailsResult?> _promptForPolygonDetails(
       AppLanguage language) async {
-    return showDialog<_PolygonDetails>(
+    final templates =
+        context.read<GeofenceMapController>().polygonTemplates.toList();
+    return showDialog<PolygonDetailsResult>(
       context: context,
-      builder: (context) {
-        return _PolygonDetailsDialog(
-          language: language,
-          colorOptions: _polygonColorOptions,
+          builder: (context) {
+            return PolygonDetailsFormDialog(
+              language: language,
+              colorOptions: kPolygonColorOptions,
+              templates: templates,
+            );
+          },
         );
-      },
-    );
+  }
+
+  List<PolygonFieldDefinition> _templateDefinitionsFromFields(
+    List<UserPolygonField> fields,
+  ) {
+    return fields
+        .map(
+          (field) => PolygonFieldDefinition(
+            name: field.name.trim(),
+            type: field.type,
+          ),
+        )
+        .where((definition) => definition.name.isNotEmpty)
+        .toList(growable: false);
   }
 
   List<Marker> _buildPointMarkers() {
@@ -375,29 +401,44 @@ class _InstructionBanner extends StatelessWidget {
   }
 }
 
-class _PolygonDetailsDialog extends StatefulWidget {
-  const _PolygonDetailsDialog({
+class PolygonDetailsFormDialog extends StatefulWidget {
+  const PolygonDetailsFormDialog({
     required this.language,
     required this.colorOptions,
+    this.templates = const <PolygonFieldTemplate>[],
+    this.initialName,
+    this.initialColor,
+    this.initialFields = const <UserPolygonField>[],
+    this.allowTemplateSelection = true,
   });
 
   final AppLanguage language;
-  final List<_PolygonColorOption> colorOptions;
+  final List<PolygonColorOption> colorOptions;
+  final List<PolygonFieldTemplate> templates;
+  final String? initialName;
+  final Color? initialColor;
+  final List<UserPolygonField> initialFields;
+  final bool allowTemplateSelection;
 
   @override
-  State<_PolygonDetailsDialog> createState() => _PolygonDetailsDialogState();
+  State<PolygonDetailsFormDialog> createState() =>
+      _PolygonDetailsFormDialogState();
 }
 
-class _PolygonDetailsDialogState extends State<_PolygonDetailsDialog> {
+class _PolygonDetailsFormDialogState extends State<PolygonDetailsFormDialog> {
   late final TextEditingController _nameController;
   late Color _selectedColor;
   final List<_EditablePolygonField> _editableFields = <_EditablePolygonField>[];
+  PolygonFieldTemplate? _appliedTemplate;
 
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController();
-    _selectedColor = widget.colorOptions.first.color;
+    _nameController = TextEditingController(text: widget.initialName ?? '');
+    _selectedColor = widget.initialColor ?? widget.colorOptions.first.color;
+    for (final field in widget.initialFields) {
+      _editableFields.add(_EditablePolygonField.fromUserField(field));
+    }
   }
 
   @override
@@ -416,13 +457,80 @@ class _PolygonDetailsDialogState extends State<_PolygonDetailsDialog> {
     }
     setState(() {
       _editableFields.add(field);
+      _appliedTemplate = null;
     });
   }
 
   void _removeField(int index) {
-    final removed = _editableFields.removeAt(index);
-    setState(() {});
+    final removed = _editableFields[index];
+    setState(() {
+      _editableFields.removeAt(index);
+      _appliedTemplate = null;
+    });
     removed.dispose();
+  }
+
+  Future<void> _selectTemplate() async {
+    if (!widget.allowTemplateSelection || widget.templates.isEmpty) {
+      return;
+    }
+
+    final selected = await showModalBottomSheet<PolygonFieldTemplate>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        final language = widget.language;
+        return SafeArea(
+          child: ListView.separated(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            itemCount: widget.templates.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (context, index) {
+              final template = widget.templates[index];
+              return ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
+                ),
+                leading: const Icon(Icons.content_paste_go),
+                title: Text(template.name),
+                subtitle: Text(
+                  _localizedText(
+                    language,
+                    '${template.fields.length} টি ক্ষেত্র',
+                    '${template.fields.length} fields',
+                  ),
+                ),
+                onTap: () => Navigator.of(sheetContext).pop(template),
+              );
+            },
+          ),
+        );
+      },
+    );
+
+    if (!mounted || selected == null) {
+      return;
+    }
+
+    _applyTemplate(selected);
+  }
+
+  void _applyTemplate(PolygonFieldTemplate template) {
+    final nextFields = template.fields
+        .map(_EditablePolygonField.fromDefinition)
+        .toList(growable: true);
+    for (final field in _editableFields) {
+      field.dispose();
+    }
+    setState(() {
+      _editableFields
+        ..clear()
+        ..addAll(nextFields);
+      _appliedTemplate = template;
+    });
   }
 
   @override
@@ -500,6 +608,37 @@ class _PolygonDetailsDialogState extends State<_PolygonDetailsDialog> {
               ],
             ),
             const SizedBox(height: 12),
+            if (widget.allowTemplateSelection && widget.templates.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: _selectTemplate,
+                      icon: const Icon(Icons.content_paste_go),
+                      label: Text(
+                        _localizedText(
+                          language,
+                          'সংরক্ষিত টেমপ্লেট ব্যবহার করুন',
+                          'Use saved template',
+                        ),
+                      ),
+                    ),
+                    if (_appliedTemplate != null)
+                      InputChip(
+                        avatar: const Icon(Icons.check, size: 18),
+                        label: Text(_appliedTemplate!.name),
+                        onDeleted: () {
+                          setState(() {
+                            _appliedTemplate = null;
+                          });
+                        },
+                      ),
+                  ],
+                ),
+              ),
             if (_editableFields.isEmpty)
               Text(
                 _localizedText(
@@ -538,9 +677,9 @@ class _PolygonDetailsDialogState extends State<_PolygonDetailsDialog> {
           ),
         ),
         FilledButton(
-          onPressed: () {
-            Navigator.of(context).pop(
-              _PolygonDetails(
+              onPressed: () {
+                Navigator.of(context).pop(
+              PolygonDetailsResult(
                 name: _nameController.text,
                 color: _selectedColor,
                 fields: _editableFields
@@ -697,8 +836,18 @@ class _AddPolygonFieldDialogState extends State<_AddPolygonFieldDialog> {
   }
 }
 
-class _PolygonDetails {
-  const _PolygonDetails({
+class PolygonCreationResult {
+  const PolygonCreationResult({
+    required this.polygon,
+    required this.templateDefinitions,
+  });
+
+  final UserPolygon polygon;
+  final List<PolygonFieldDefinition> templateDefinitions;
+}
+
+class PolygonDetailsResult {
+  const PolygonDetailsResult({
     required this.name,
     required this.color,
     required this.fields,
@@ -713,7 +862,53 @@ class _EditablePolygonField {
   _EditablePolygonField({
     required this.name,
     required this.type,
-  }) : controller = TextEditingController();
+    dynamic initialValue,
+  }) : controller = TextEditingController() {
+    _applyInitialValue(initialValue);
+  }
+
+  factory _EditablePolygonField.fromDefinition(
+    PolygonFieldDefinition definition,
+  ) {
+    return _EditablePolygonField(
+      name: definition.name,
+      type: definition.type,
+    );
+  }
+
+  factory _EditablePolygonField.fromUserField(UserPolygonField field) {
+    return _EditablePolygonField(
+      name: field.name,
+      type: field.type,
+      initialValue: field.value,
+    );
+  }
+
+  void _applyInitialValue(dynamic initialValue) {
+    switch (type) {
+      case UserPolygonFieldType.text:
+        if (initialValue is String) {
+          controller.text = initialValue.trim();
+        } else if (initialValue != null) {
+          controller.text = initialValue.toString();
+        }
+        break;
+      case UserPolygonFieldType.number:
+        if (initialValue is num) {
+          controller.text = initialValue.toString();
+        } else if (initialValue is String) {
+          controller.text = initialValue.trim();
+        }
+        break;
+      case UserPolygonFieldType.date:
+        if (initialValue is DateTime) {
+          dateValue = initialValue;
+        } else if (initialValue is String) {
+          dateValue = DateTime.tryParse(initialValue);
+        }
+        break;
+    }
+  }
 
   UserPolygonField? toUserPolygonField() {
     switch (type) {
@@ -918,8 +1113,8 @@ String _fieldValueHint(UserPolygonFieldType type, AppLanguage language) {
   }
 }
 
-class _PolygonColorOption {
-  const _PolygonColorOption({required this.label, required this.color});
+class PolygonColorOption {
+  const PolygonColorOption({required this.label, required this.color});
 
   final LocalizedText label;
   final Color color;

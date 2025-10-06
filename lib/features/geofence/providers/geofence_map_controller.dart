@@ -18,6 +18,7 @@ import 'package:balumohol/features/geofence/models/custom_place.dart';
 import 'package:balumohol/features/geofence/models/geofence_result.dart';
 import 'package:balumohol/features/geofence/models/location_history_entry.dart';
 import 'package:balumohol/features/geofence/models/polygon_feature.dart';
+import 'package:balumohol/features/geofence/models/polygon_field_template.dart';
 import 'package:balumohol/features/geofence/models/position_sample.dart';
 import 'package:balumohol/features/geofence/models/user_polygon.dart';
 import 'package:balumohol/features/geofence/utils/geo_utils.dart';
@@ -103,6 +104,7 @@ class GeofenceMapController extends ChangeNotifier {
   final List<PolygonFeature> _boundaryPolygons = [];
   final List<PolygonFeature> _mouzaPolygons = [];
   final List<PolygonFeature> _otherPolygons = [];
+  final List<PolygonFieldTemplate> _polygonTemplates = [];
   final SplayTreeSet<String> _availableMouzaNames = SplayTreeSet<String>(
     (a, b) => a.toLowerCase().compareTo(b.toLowerCase()),
   );
@@ -149,6 +151,7 @@ class GeofenceMapController extends ChangeNotifier {
     await _loadGeoJsonBoundary();
     await _loadHistory();
     await _loadCustomPlaces();
+    await _loadPolygonTemplates();
     await _loadUserPolygons();
     await _startLocationTracking();
   }
@@ -188,6 +191,26 @@ class GeofenceMapController extends ChangeNotifier {
     return math.atan2(deltaLon, deltaLat);
   }
   List<UserPolygon> get userPolygons => List.unmodifiable(_userPolygons);
+  List<PolygonFieldTemplate> get polygonTemplates =>
+      List.unmodifiable(_polygonTemplates);
+
+  UserPolygon? userPolygonById(String id) {
+    for (final polygon in _userPolygons) {
+      if (polygon.id == id) {
+        return polygon;
+      }
+    }
+    return null;
+  }
+
+  UserPolygon? userPolygonForFeatureId(String featureId) {
+    const prefix = 'user_';
+    if (!featureId.startsWith(prefix)) {
+      return null;
+    }
+    final polygonId = featureId.substring(prefix.length);
+    return userPolygonById(polygonId);
+  }
 
   LatLng? get currentLocation => _currentLocation;
   double? get currentAccuracy => _currentAccuracy;
@@ -305,6 +328,47 @@ class GeofenceMapController extends ChangeNotifier {
     _userPolygons.add(polygon);
     _refreshVisiblePolygons();
     await _persistUserPolygons();
+  }
+
+  Future<void> updateUserPolygon(UserPolygon updated) async {
+    final index = _userPolygons.indexWhere((polygon) => polygon.id == updated.id);
+    if (index == -1) {
+      return;
+    }
+    _userPolygons[index] = updated;
+    _refreshVisiblePolygons();
+    await _persistUserPolygons();
+  }
+
+  Future<void> removeUserPolygon(String polygonId) async {
+    final previousLength = _userPolygons.length;
+    _userPolygons.removeWhere((polygon) => polygon.id == polygonId);
+    if (_userPolygons.length == previousLength) {
+      return;
+    }
+    _refreshVisiblePolygons();
+    await _persistUserPolygons();
+  }
+
+  Future<void> addPolygonTemplate(PolygonFieldTemplate template) async {
+    final index = _polygonTemplates.indexWhere((item) => item.id == template.id);
+    if (index >= 0) {
+      _polygonTemplates[index] = template;
+    } else {
+      _polygonTemplates.add(template);
+    }
+    _notifySafely();
+    await _persistPolygonTemplates();
+  }
+
+  Future<void> removePolygonTemplate(String templateId) async {
+    final previousLength = _polygonTemplates.length;
+    _polygonTemplates.removeWhere((template) => template.id == templateId);
+    if (_polygonTemplates.length == previousLength) {
+      return;
+    }
+    _notifySafely();
+    await _persistPolygonTemplates();
   }
 
   Future<void> removeCustomPlace(CustomPlace place) async {
@@ -671,6 +735,25 @@ class GeofenceMapController extends ChangeNotifier {
     }
   }
 
+  Future<void> _loadPolygonTemplates() async {
+    final stored = _preferences.getString(userPolygonTemplatesStorageKey);
+    if (stored == null) return;
+    try {
+      final decoded = json.decode(stored) as List<dynamic>;
+      final templates = decoded
+          .whereType<Map<String, dynamic>>()
+          .map(PolygonFieldTemplate.fromJson)
+          .where((template) => template.name.isNotEmpty)
+          .toList();
+      _polygonTemplates
+        ..clear()
+        ..addAll(templates);
+      _notifySafely();
+    } catch (_) {
+      // ignore malformed stored data
+    }
+  }
+
   Future<void> _loadUserPolygons() async {
     final stored = _preferences.getString(userPolygonsStorageKey);
     if (stored == null) return;
@@ -700,6 +783,13 @@ class GeofenceMapController extends ChangeNotifier {
       _customPlaces.map((place) => place.toJson()).toList(),
     );
     await _preferences.setString(customPlacesStorageKey, encoded);
+  }
+
+  Future<void> _persistPolygonTemplates() async {
+    final encoded = json.encode(
+      _polygonTemplates.map((template) => template.toJson()).toList(),
+    );
+    await _preferences.setString(userPolygonTemplatesStorageKey, encoded);
   }
 
   Future<void> _persistUserPolygons() async {
