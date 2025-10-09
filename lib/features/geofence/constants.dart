@@ -11,6 +11,8 @@ const String userPolygonsStorageKey = 'userPolygons';
 const String userPolygonTemplatesStorageKey = 'userPolygonTemplates';
 
 const List<String> placeCategories = [
+  'Home',
+  'Apartment',
   'Restaurant',
   'Cafe',
   'Coffee shop',

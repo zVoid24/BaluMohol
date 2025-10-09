@@ -13,6 +13,27 @@ class PlaceCategoryStyle {
 PlaceCategoryStyle styleForCategory(String category) {
   final normalized = category.toLowerCase();
 
+  if (normalized == 'home' || normalized == 'house') {
+    return PlaceCategoryStyle(
+      icon: Icons.home,
+      color: Colors.teal.shade600,
+    );
+  }
+
+  if (normalized.contains('apartment') || normalized == 'flat') {
+    return PlaceCategoryStyle(
+      icon: Icons.apartment,
+      color: Colors.indigo.shade500,
+    );
+  }
+
+  if (normalized == 'other' || normalized == 'others') {
+    return PlaceCategoryStyle(
+      icon: Icons.category_outlined,
+      color: Colors.grey.shade600,
+    );
+  }
+
   if (_containsAny(normalized, const [
     'hospital',
     'clinic',

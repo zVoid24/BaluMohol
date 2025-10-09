@@ -57,6 +57,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
   final _formKey = GlobalKey<FormState>();
   final MapController _mapController = MapController();
   final ImagePicker _imagePicker = ImagePicker();
+  final FocusNode _categoryFocusNode = FocusNode();
   final FocusNode _addressFocusNode = FocusNode();
 
   late final TextEditingController _nameController;
@@ -81,6 +82,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
   List<_AddressSuggestion> _addressOptions = <_AddressSuggestion>[];
   String? _addressLookupMessage;
   bool _addressLookupIsError = false;
+  String? _quickCategorySelection;
 
   @override
   void initState() {
@@ -90,6 +92,11 @@ class _AddPlacePageState extends State<AddPlacePage> {
     _categoryController = TextEditingController(
       text: existingPlace?.category ?? '',
     );
+    _quickCategorySelection = _deriveQuickSelection(
+      _categoryController.text,
+      previous: null,
+    );
+    _categoryController.addListener(_handleCategoryChanged);
     _addressController = TextEditingController(
       text: existingPlace?.address ?? '',
     );
@@ -128,6 +135,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
   @override
   void dispose() {
     _nameController.dispose();
+    _categoryController.removeListener(_handleCategoryChanged);
     _categoryController.dispose();
     _addressController.dispose();
     _locatedWithinController.dispose();
@@ -135,8 +143,33 @@ class _AddPlacePageState extends State<AddPlacePage> {
     _websiteController.dispose();
     _descriptionController.dispose();
     _addressDebounce?.cancel();
+    _categoryFocusNode.dispose();
     _addressFocusNode.dispose();
     super.dispose();
+  }
+
+  void _handleCategoryChanged() {
+    if (!mounted) return;
+    setState(() {
+      _quickCategorySelection = _deriveQuickSelection(
+        _categoryController.text,
+        previous: _quickCategorySelection,
+      );
+    });
+  }
+
+  String? _deriveQuickSelection(String value, {String? previous}) {
+    final normalized = value.trim().toLowerCase();
+    if (normalized == 'home') {
+      return 'home';
+    }
+    if (normalized == 'apartment') {
+      return 'apartment';
+    }
+    if (normalized.isEmpty) {
+      return previous == 'other' ? 'other' : null;
+    }
+    return 'other';
   }
 
   void _onAddressQueryChanged(String value) {
@@ -303,6 +336,84 @@ class _AddPlacePageState extends State<AddPlacePage> {
       focusedBorder: baseBorder.copyWith(
         borderSide: BorderSide(color: colorScheme.primary, width: 2),
       ),
+    );
+  }
+
+  Widget _buildCategoryQuickOptions(ThemeData theme) {
+    final selection = _quickCategorySelection;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Quick category options',
+          style: theme.textTheme.bodySmall?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ChoiceChip(
+              avatar: const Icon(Icons.home_outlined),
+              label: const Text('Home'),
+              selected: selection == 'home',
+              onSelected: (selected) {
+                if (!selected) return;
+                if (_categoryController.text.trim().toLowerCase() != 'home') {
+                  _categoryController.text = 'Home';
+                }
+                FocusScope.of(context).unfocus();
+              },
+            ),
+            ChoiceChip(
+              avatar: const Icon(Icons.apartment),
+              label: const Text('Apartment'),
+              selected: selection == 'apartment',
+              onSelected: (selected) {
+                if (!selected) return;
+                if (_categoryController.text.trim().toLowerCase() !=
+                    'apartment') {
+                  _categoryController.text = 'Apartment';
+                }
+                FocusScope.of(context).unfocus();
+              },
+            ),
+            ChoiceChip(
+              avatar: const Icon(Icons.create_outlined),
+              label: const Text('Other'),
+              selected: selection == 'other',
+              onSelected: (selected) {
+                if (!selected) {
+                  if (_categoryController.text.trim().isEmpty) {
+                    setState(() {
+                      _quickCategorySelection = null;
+                    });
+                  }
+                  return;
+                }
+                setState(() {
+                  _quickCategorySelection = 'other';
+                });
+                final currentValue = _categoryController.text.trim().toLowerCase();
+                if (currentValue == 'home' || currentValue == 'apartment') {
+                  _categoryController.clear();
+                }
+                FocusScope.of(context).requestFocus(_categoryFocusNode);
+              },
+            ),
+          ],
+        ),
+        if (selection == 'other')
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              'Type a custom category above.',
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+      ],
     );
   }
 
@@ -702,6 +813,7 @@ class _AddPlacePageState extends State<AddPlacePage> {
                         const SizedBox(height: 12),
                         TextFormField(
                           controller: _categoryController,
+                          focusNode: _categoryFocusNode,
                           decoration: _buildFieldDecoration(
                             label: 'Category (required)',
                             hint: 'e.g. Grocery store',
@@ -714,6 +826,8 @@ class _AddPlacePageState extends State<AddPlacePage> {
                           textInputAction: TextInputAction.next,
                           validator: _validateRequired,
                         ),
+                        const SizedBox(height: 8),
+                        _buildCategoryQuickOptions(theme),
                         const SizedBox(height: 12),
                         LayoutBuilder(
                           builder: (context, fieldConstraints) {

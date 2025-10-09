@@ -20,6 +20,7 @@ import 'package:balumohol/features/geofence/presentation/widgets/polygon_details
 import 'package:balumohol/features/geofence/providers/geofence_map_controller.dart';
 import 'package:balumohol/features/geofence/utils/geo_utils.dart';
 import 'package:balumohol/features/places/presentation/pages/add_place_page.dart';
+import 'package:balumohol/features/geofence/presentation/pages/user_manual_page.dart';
 
 String _localize(AppLanguage language, String bangla, String english) {
   return language.isBangla ? bangla : english;
@@ -218,6 +219,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
           onClearMouzas: controller.clearMouzaSelection,
           onToggleBoundary: controller.setShowBoundary,
           onToggleOtherPolygons: controller.setShowOtherPolygons,
+          onOpenUserManual: _openUserManual,
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
@@ -673,7 +675,9 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
       return;
     }
 
-    final started = await controller.startTracking();
+    final started = await controller.startTracking(
+      reset: controller.trackingPath.isEmpty,
+    );
     if (!mounted) return;
     if (!started) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -828,6 +832,15 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
     final displayName = result.name.isEmpty ? 'New place' : result.name;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('📍 "$displayName" added to the map.')),
+    );
+  }
+
+  Future<void> _openUserManual() async {
+    Scaffold.maybeOf(context)?.closeDrawer();
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const UserManualPage(),
+      ),
     );
   }
 
@@ -1411,6 +1424,7 @@ class _MapSidebar extends StatelessWidget {
     required this.onClearMouzas,
     required this.onToggleBoundary,
     required this.onToggleOtherPolygons,
+    required this.onOpenUserManual,
   });
 
   final GeofenceMapController controller;
@@ -1425,6 +1439,7 @@ class _MapSidebar extends StatelessWidget {
   final VoidCallback onClearMouzas;
   final ValueChanged<bool> onToggleBoundary;
   final ValueChanged<bool> onToggleOtherPolygons;
+  final VoidCallback onOpenUserManual;
 
   static const List<LocalizedText> _balumohalInformationItems = <LocalizedText>[
     LocalizedText(bangla: 'ড্রেজারের লোকেশন', english: 'Dredger locations'),
@@ -1528,6 +1543,12 @@ class _MapSidebar extends StatelessWidget {
                   Text(
                     _text('তথ্য সেবা', 'Information services'),
                     style: theme.textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  FilledButton.tonalIcon(
+                    onPressed: onOpenUserManual,
+                    icon: const Icon(Icons.menu_book),
+                    label: Text(_text('ব্যবহার নির্দেশিকা', 'User manual')),
                   ),
                   const SizedBox(height: 8),
                   _CollapsibleInformationButton(
