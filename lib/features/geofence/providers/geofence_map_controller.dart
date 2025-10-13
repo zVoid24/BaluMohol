@@ -13,6 +13,7 @@ import 'package:balumohol/core/language/localized_text.dart';
 import 'package:balumohol/core/location/location_service.dart';
 import 'package:balumohol/core/storage/preferences_service.dart';
 import 'package:balumohol/core/utils/formatting.dart';
+import 'package:balumohol/features/geofence/data/geofence_api_service.dart';
 import 'package:balumohol/features/geofence/constants.dart';
 import 'package:balumohol/features/geofence/models/custom_place.dart';
 import 'package:balumohol/features/geofence/models/geofence_result.dart';
@@ -27,8 +28,10 @@ class GeofenceMapController extends ChangeNotifier {
   GeofenceMapController({
     required LocationService locationService,
     required PreferencesService preferencesService,
+    required GeofenceApiService apiService,
   })  : _locationService = locationService,
-        _preferences = preferencesService;
+        _preferences = preferencesService,
+        _apiService = apiService;
 
   static const LocalizedText _loadingBoundariesMessage = LocalizedText(
     bangla: 'সীমানা লোড হচ্ছে...',
@@ -72,6 +75,25 @@ class GeofenceMapController extends ChangeNotifier {
     bangla: 'সীমানার তথ্য পাওয়া যায়নি।',
     english: 'No boundary information available.',
   );
+  static const LocalizedText _loadingMouzaListStatusMessage = LocalizedText(
+    bangla: 'মৌজা তালিকা লোড হচ্ছে...',
+    english: 'Loading mouza list...',
+  );
+  static const LocalizedText _failedToLoadMouzaListStatusMessage =
+      LocalizedText(
+    bangla: 'মৌজা তালিকা লোড করা যায়নি।',
+    english: 'Failed to load mouza list.',
+  );
+  static const LocalizedText _loadingMouzaPolygonsStatusMessage =
+      LocalizedText(
+    bangla: 'মৌজার প্লট তথ্য লোড হচ্ছে...',
+    english: 'Loading mouza plot data...',
+  );
+  static const LocalizedText _failedToLoadMouzaPolygonsStatusMessage =
+      LocalizedText(
+    bangla: 'মৌজার প্লট তথ্য লোড ব্যর্থ হয়েছে।',
+    english: 'Failed to load mouza plot data.',
+  );
 
   void _refreshVisiblePolygons({bool notify = true}) {
     _visiblePolygons
@@ -104,6 +126,12 @@ class GeofenceMapController extends ChangeNotifier {
   final List<PolygonFeature> _boundaryPolygons = [];
   final List<PolygonFeature> _mouzaPolygons = [];
   final List<PolygonFeature> _otherPolygons = [];
+  final Map<String, List<String>> _upazilaMouzaNames = {};
+  String? _selectedUpazila;
+  bool _loadingUpazilas = false;
+  String? _upazilaLoadError;
+  final Map<String, Map<String, List<PolygonFeature>>> _mouzaPolygonCache = {};
+  final Set<String> _loadingMouzaKeys = <String>{};
   final List<PolygonFieldTemplate> _polygonTemplates = [];
   final SplayTreeSet<String> _availableMouzaNames = SplayTreeSet<String>(
     (a, b) => a.toLowerCase().compareTo(b.toLowerCase()),
@@ -139,6 +167,7 @@ class GeofenceMapController extends ChangeNotifier {
 
   final LocationService _locationService;
   final PreferencesService _preferences;
+  final GeofenceApiService _apiService;
   StreamSubscription<Position>? _positionSubscription;
   Timer? _historyTimer;
 
@@ -154,6 +183,7 @@ class GeofenceMapController extends ChangeNotifier {
     await _loadPolygonTemplates();
     await _loadUserPolygons();
     await _startLocationTracking();
+    unawaited(_loadUpazilaMouzas());
   }
 
   @override
@@ -161,6 +191,7 @@ class GeofenceMapController extends ChangeNotifier {
     _disposed = true;
     _historyTimer?.cancel();
     _positionSubscription?.cancel();
+    _apiService.dispose();
     super.dispose();
   }
 
@@ -172,6 +203,16 @@ class GeofenceMapController extends ChangeNotifier {
   List<String> get availableMouzaNames =>
       List.unmodifiable(_availableMouzaNames.toList(growable: false));
   Set<String> get selectedMouzaNames => Set.unmodifiable(_selectedMouzaNames);
+  List<String> get upazilaNames =>
+      List.unmodifiable(_upazilaMouzaNames.keys.toList(growable: false));
+  String? get selectedUpazila => _selectedUpazila;
+  bool get isLoadingUpazilas => _loadingUpazilas;
+  String? get upazilaLoadError => _upazilaLoadError;
+  bool isMouzaLoading(String mouza) {
+    final upazila = _selectedUpazila;
+    if (upazila == null) return false;
+    return _loadingMouzaKeys.contains(_cacheKey(upazila, mouza));
+  }
   List<LocationHistoryEntry> get history => List.unmodifiable(_history);
   List<CustomPlace> get customPlaces => List.unmodifiable(_customPlaces);
   List<LatLng> get trackingPath => List.unmodifiable(_trackingPath);
@@ -438,7 +479,10 @@ class GeofenceMapController extends ChangeNotifier {
 
     final newlySelected = filtered.difference(previousSelection);
     if (newlySelected.isNotEmpty) {
-      _focusOnMouza(newlySelected.first);
+      _loadSelectedMouzaPolygons(
+        newlySelected: newlySelected,
+        focusTarget: newlySelected.first,
+      );
     }
   }
 
@@ -558,14 +602,8 @@ class GeofenceMapController extends ChangeNotifier {
       final boundaryRaw = await rootBundle.loadString(
         'assets/Daulatpur_Sheet_Boundary_WGS1984.geojson',
       );
-      final mouzaRaw = await rootBundle.loadString(
-        'assets/Daulatpur_Mauza_Digitization_WGS1984.geojson',
-      );
-
       final Map<String, dynamic> boundaryData =
           json.decode(boundaryRaw) as Map<String, dynamic>;
-      final Map<String, dynamic> mouzaData =
-          json.decode(mouzaRaw) as Map<String, dynamic>;
 
       final outputRaw = await rootBundle.loadString(
         'assets/output.geojson',
@@ -579,12 +617,6 @@ class GeofenceMapController extends ChangeNotifier {
         prefix: 'boundary',
         layerType: 'boundary',
       );
-      final mouzaPolygons = _withPrefixedIds(
-        parsePolygons(mouzaData),
-        prefix: 'mouza',
-        layerType: 'mouza',
-      );
-
       final outputPolygons = _withPrefixedIds(
         parsePolygons(outputData),
         prefix: 'output',
@@ -601,23 +633,7 @@ class GeofenceMapController extends ChangeNotifier {
 
       _mouzaPolygons.clear();
       _otherPolygons.clear();
-      for (final polygon in mouzaPolygons) {
-        final mouzaName = _mouzaNameForPolygon(polygon);
-        if (mouzaName != null && mouzaName.isNotEmpty) {
-          _mouzaPolygons.add(polygon);
-        } else {
-          _otherPolygons.add(polygon);
-        }
-      }
-
-      _availableMouzaNames
-        ..clear()
-        ..addAll(
-          _mouzaPolygons
-              .map(_mouzaNameForPolygon)
-              .whereType<String>()
-              .where((name) => name.isNotEmpty),
-        );
+      _availableMouzaNames.clear();
       _selectedMouzaNames.clear();
 
       _geofencePolygons
@@ -691,6 +707,169 @@ class GeofenceMapController extends ChangeNotifier {
       _errorMessage = e.toString();
       _notifySafely();
     }
+  }
+
+  Future<void> _loadUpazilaMouzas() async {
+    if (_loadingUpazilas) return;
+    final previousStatus = _statusMessage;
+    _loadingUpazilas = true;
+    _statusMessage = _loadingMouzaListStatusMessage;
+    _notifySafely();
+
+    try {
+      final data = await _apiService.fetchUpazilaMouzas();
+      _upazilaMouzaNames
+        ..clear()
+        ..addAll(data);
+
+      if (_upazilaMouzaNames.isEmpty) {
+        _selectedUpazila = null;
+      } else if (_selectedUpazila == null ||
+          !_upazilaMouzaNames.containsKey(_selectedUpazila)) {
+        _selectedUpazila = _upazilaMouzaNames.keys.first;
+      }
+
+      _updateAvailableMouzaNames();
+      _syncMouzaPolygonsFromCache();
+      _upazilaLoadError = null;
+      _statusMessage = previousStatus;
+      _refreshVisiblePolygons();
+    } catch (error) {
+      _upazilaLoadError = error.toString();
+      _statusMessage = _failedToLoadMouzaListStatusMessage;
+      _notifySafely();
+    } finally {
+      _loadingUpazilas = false;
+      if (_statusMessage == _loadingMouzaListStatusMessage) {
+        _statusMessage = previousStatus;
+      }
+      _notifySafely();
+    }
+  }
+
+  void setSelectedUpazila(String? upazila) {
+    final changed = _selectedUpazila != upazila;
+    _selectedUpazila = upazila;
+    if (changed) {
+      _selectedMouzaNames.clear();
+    }
+    _updateAvailableMouzaNames();
+    _syncMouzaPolygonsFromCache();
+    _refreshVisiblePolygons();
+  }
+
+  void _updateAvailableMouzaNames() {
+    final upazila = _selectedUpazila;
+    _availableMouzaNames.clear();
+    if (upazila != null) {
+      final mouzas = _upazilaMouzaNames[upazila];
+      if (mouzas != null) {
+        _availableMouzaNames.addAll(mouzas);
+      }
+    }
+
+    final toRemove = _selectedMouzaNames
+        .where((name) => !_availableMouzaNames.contains(name))
+        .toList(growable: false);
+    if (toRemove.isNotEmpty) {
+      _selectedMouzaNames.removeAll(toRemove);
+    }
+  }
+
+  void _syncMouzaPolygonsFromCache() {
+    _mouzaPolygons.clear();
+    final upazila = _selectedUpazila;
+    if (upazila == null) {
+      return;
+    }
+    final cache = _mouzaPolygonCache[upazila];
+    if (cache == null) {
+      return;
+    }
+    for (final polygons in cache.values) {
+      _mouzaPolygons.addAll(polygons);
+    }
+  }
+
+  void _loadSelectedMouzaPolygons({
+    required Set<String> newlySelected,
+    String? focusTarget,
+  }) {
+    final upazila = _selectedUpazila;
+    if (upazila == null) {
+      return;
+    }
+    for (final mouza in newlySelected) {
+      unawaited(
+        _fetchMouzaPolygons(
+          upazila: upazila,
+          mouza: mouza,
+          focusOnLoad: focusTarget == mouza,
+        ),
+      );
+    }
+  }
+
+  Future<void> _fetchMouzaPolygons({
+    required String upazila,
+    required String mouza,
+    bool focusOnLoad = false,
+  }) async {
+    final perUpazila =
+        _mouzaPolygonCache.putIfAbsent(upazila, () => <String, List<PolygonFeature>>{});
+    if (perUpazila.containsKey(mouza)) {
+      _syncMouzaPolygonsFromCache();
+      if (focusOnLoad) {
+        _focusOnMouza(mouza, highlight: true);
+      }
+      _refreshVisiblePolygons();
+      return;
+    }
+
+    final key = _cacheKey(upazila, mouza);
+    if (_loadingMouzaKeys.contains(key)) {
+      return;
+    }
+
+    _loadingMouzaKeys.add(key);
+    final previousStatus = _statusMessage;
+    _statusMessage = _loadingMouzaPolygonsStatusMessage;
+    _notifySafely();
+
+    try {
+      final polygons = await _apiService.fetchMouzaPolygons(
+        upazila: upazila,
+        mouza: mouza,
+      );
+      final filtered = polygons.where((polygon) => polygon.outer.isNotEmpty).toList();
+      perUpazila[mouza] = _withPrefixedIds(
+        filtered,
+        prefix: 'mouza_${_sanitizeId(upazila)}_${_sanitizeId(mouza)}',
+        layerType: 'mouza',
+      );
+      _syncMouzaPolygonsFromCache();
+      _statusMessage = previousStatus;
+      _refreshVisiblePolygons();
+      if (focusOnLoad) {
+        _focusOnMouza(mouza, highlight: true);
+      }
+    } catch (error) {
+      _errorMessage = error.toString();
+      _statusMessage = _failedToLoadMouzaPolygonsStatusMessage;
+      _notifySafely();
+    } finally {
+      _loadingMouzaKeys.remove(key);
+      if (_statusMessage == _loadingMouzaPolygonsStatusMessage) {
+        _statusMessage = previousStatus;
+      }
+      _notifySafely();
+    }
+  }
+
+  String _cacheKey(String upazila, String mouza) => '$upazila::$mouza';
+
+  String _sanitizeId(String value) {
+    return value.replaceAll(RegExp(r'[^a-zA-Z0-9]+'), '_');
   }
 
   Future<void> _loadHistory() async {

@@ -213,6 +213,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
           onAddPolygon: () => _startPolygonDrawing(controller),
           onToggleTracking: trackingCallback,
           onCalibrate: calibrateCallback,
+          onUpazilaChanged: controller.setSelectedUpazila,
           onMouzaSelectionChanged: (selection) =>
               controller.setSelectedMouzas(selection),
           onSelectAllMouzas: controller.selectAllMouzas,
@@ -1419,6 +1420,7 @@ class _MapSidebar extends StatelessWidget {
     required this.onAddPolygon,
     required this.onToggleTracking,
     required this.onCalibrate,
+    required this.onUpazilaChanged,
     required this.onMouzaSelectionChanged,
     required this.onSelectAllMouzas,
     required this.onClearMouzas,
@@ -1434,6 +1436,7 @@ class _MapSidebar extends StatelessWidget {
   final VoidCallback onAddPolygon;
   final VoidCallback? onToggleTracking;
   final VoidCallback? onCalibrate;
+  final ValueChanged<String?> onUpazilaChanged;
   final ValueChanged<Set<String>> onMouzaSelectionChanged;
   final VoidCallback onSelectAllMouzas;
   final VoidCallback onClearMouzas;
@@ -1460,6 +1463,10 @@ class _MapSidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final upazilas = controller.upazilaNames;
+    final selectedUpazila = controller.selectedUpazila;
+    final isLoadingUpazilas = controller.isLoadingUpazilas;
+    final upazilaError = controller.upazilaLoadError;
     final mouzas = controller.availableMouzaNames;
     final selectedMouzas = controller.selectedMouzaNames;
     String _text(String bangla, String english) =>
@@ -1582,6 +1589,72 @@ class _MapSidebar extends StatelessWidget {
                       childrenPadding: EdgeInsets.zero,
                       title: Text(_text('মৌজা', 'Mouza')),
                       children: [
+                        if (isLoadingUpazilas)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Row(
+                              children: [
+                                const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.2,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    _text(
+                                      'উপজেলা তালিকা লোড হচ্ছে...',
+                                      'Loading upazila list...',
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        else if (upazilas.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Text(
+                              _text(
+                                'কোনও উপজেলা তথ্য পাওয়া যায়নি।',
+                                'No upazila data available.',
+                              ),
+                            ),
+                          )
+                        else
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: DropdownButtonFormField<String>(
+                              value: selectedUpazila,
+                              decoration: InputDecoration(
+                                labelText:
+                                    _text('উপজেলা নির্বাচন করুন', 'Select upazila'),
+                                border: const OutlineInputBorder(),
+                                isDense: true,
+                              ),
+                              items: upazilas
+                                  .map(
+                                    (upazila) => DropdownMenuItem<String>(
+                                      value: upazila,
+                                      child: Text(_formatLabel(upazila)),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: onUpazilaChanged,
+                            ),
+                          ),
+                        if (upazilaError != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Text(
+                              upazilaError!,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.error,
+                              ),
+                            ),
+                          ),
                         SwitchListTile(
                           value: controller.showBoundary,
                           onChanged: onToggleBoundary,
@@ -1591,16 +1664,23 @@ class _MapSidebar extends StatelessWidget {
                           dense: true,
                           contentPadding: EdgeInsets.zero,
                         ),
-                        if (mouzas.isEmpty)
+                        if (selectedUpazila == null)
                           Padding(
-                            padding: EdgeInsets.only(bottom: 12),
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                _text(
-                                  'কোনও মৌজা তথ্য পাওয়া যায়নি।',
-                                  'No mouza data available.',
-                                ),
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Text(
+                              _text(
+                                'মৌজা দেখতে একটি উপজেলা নির্বাচন করুন।',
+                                'Select an upazila to view mouzas.',
+                              ),
+                            ),
+                          )
+                        else if (mouzas.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Text(
+                              _text(
+                                'এই উপজেলার জন্য কোনও মৌজা তথ্য পাওয়া যায়নি।',
+                                'No mouza data available for this upazila.',
                               ),
                             ),
                           )
@@ -1617,8 +1697,8 @@ class _MapSidebar extends StatelessWidget {
                                     OutlinedButton.icon(
                                       onPressed:
                                           selectedMouzas.length == mouzas.length
-                                          ? null
-                                          : onSelectAllMouzas,
+                                              ? null
+                                              : onSelectAllMouzas,
                                       icon: const Icon(Icons.select_all),
                                       label: Text(
                                         _text('সব নির্বাচন করুন', 'Select all'),
@@ -1639,14 +1719,25 @@ class _MapSidebar extends StatelessWidget {
                                   ],
                                 ),
                                 const SizedBox(height: 12),
-                                ...mouzas.map(
-                                  (mouza) => CheckboxListTile(
+                                ...mouzas.map((mouza) {
+                                  final isMouzaLoading =
+                                      controller.isMouzaLoading(mouza);
+                                  return CheckboxListTile(
                                     value: selectedMouzas.contains(mouza),
-                                    title: Text(_formatMouzaName(mouza)),
+                                    title: Text(_formatLabel(mouza)),
                                     dense: true,
                                     controlAffinity:
                                         ListTileControlAffinity.leading,
                                     contentPadding: EdgeInsets.zero,
+                                    secondary: isMouzaLoading
+                                        ? const SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : null,
                                     onChanged: (checked) {
                                       final next = selectedMouzas.toSet();
                                       if (checked ?? false) {
@@ -1656,8 +1747,8 @@ class _MapSidebar extends StatelessWidget {
                                       }
                                       onMouzaSelectionChanged(next);
                                     },
-                                  ),
-                                ),
+                                  );
+                                }),
                               ],
                             ),
                           ),
@@ -1692,7 +1783,7 @@ class _MapSidebar extends StatelessWidget {
     );
   }
 
-  String _formatMouzaName(String value) {
+  String _formatLabel(String value) {
     return value.replaceAll('_', ' ');
   }
 }

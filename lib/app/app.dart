@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:balumohol/core/language/language_controller.dart';
 import 'package:balumohol/core/location/location_service.dart';
 import 'package:balumohol/core/storage/preferences_service.dart';
+import 'package:balumohol/features/geofence/data/geofence_api_service.dart';
 import 'package:balumohol/features/geofence/presentation/pages/geofence_map_page.dart';
 import 'package:balumohol/features/geofence/providers/geofence_map_controller.dart';
 
@@ -21,6 +22,7 @@ class MyApp extends StatelessWidget {
           create: (_) => GeofenceMapController(
             locationService: const GeolocatorLocationService(),
             preferencesService: SharedPreferencesService(),
+            apiService: GeofenceApiService(),
           ),
         ),
       ],
