@@ -29,9 +29,9 @@ class GeofenceMapController extends ChangeNotifier {
     required LocationService locationService,
     required PreferencesService preferencesService,
     required GeofenceApiService apiService,
-  })  : _locationService = locationService,
-        _preferences = preferencesService,
-        _apiService = apiService;
+  }) : _locationService = locationService,
+       _preferences = preferencesService,
+       _apiService = apiService;
 
   static const LocalizedText _loadingBoundariesMessage = LocalizedText(
     bangla: 'সীমানা লোড হচ্ছে...',
@@ -40,8 +40,7 @@ class GeofenceMapController extends ChangeNotifier {
   static const LocalizedText _calibratingStatusMessage = LocalizedText(
     bangla:
         'ক্যালিব্রেশন চলছে — সামান্য নড়াচড়া করুন এবং জিপিএস স্থিতিশীল হওয়ার জন্য অপেক্ষা করুন...',
-    english:
-        'Calibrating — move slightly and wait for the GPS to stabilize...',
+    english: 'Calibrating — move slightly and wait for the GPS to stabilize...',
   );
   static const LocalizedText _waitingForGpsStatusMessage = LocalizedText(
     bangla: 'জিপিএস সিগন্যালের জন্য অপেক্ষা করা হচ্ছে...',
@@ -49,28 +48,28 @@ class GeofenceMapController extends ChangeNotifier {
   );
   static const LocalizedText _failedToLoadBoundariesStatusMessage =
       LocalizedText(
-    bangla: 'কার্যালয়ের সীমানা লোড করা যায়নি।',
-    english: 'Failed to load office boundaries.',
-  );
+        bangla: 'কার্যালয়ের সীমানা লোড করা যায়নি।',
+        english: 'Failed to load office boundaries.',
+      );
   static const LocalizedText _locationErrorStatusMessage = LocalizedText(
     bangla: 'অবস্থান পাওয়ার সময় ত্রুটি ঘটেছে।',
     english: 'An error occurred while fetching the location.',
   );
   static const LocalizedText _locationServicesDisabledStatusMessage =
       LocalizedText(
-    bangla: 'এই ডিভাইসে অবস্থান সেবা বন্ধ আছে।',
-    english: 'Location services are disabled on this device.',
-  );
+        bangla: 'এই ডিভাইসে অবস্থান সেবা বন্ধ আছে।',
+        english: 'Location services are disabled on this device.',
+      );
   static const LocalizedText _locationPermissionDeniedStatusMessage =
       LocalizedText(
-    bangla: 'অবস্থান অনুমতি প্রত্যাখ্যান করা হয়েছে।',
-    english: 'Location permission was denied.',
-  );
+        bangla: 'অবস্থান অনুমতি প্রত্যাখ্যান করা হয়েছে।',
+        english: 'Location permission was denied.',
+      );
   static const LocalizedText _locationPermissionPermanentlyDeniedStatusMessage =
       LocalizedText(
-    bangla: 'অবস্থান অনুমতি স্থায়ীভাবে প্রত্যাখ্যান করা হয়েছে।',
-    english: 'Location permission was permanently denied.',
-  );
+        bangla: 'অবস্থান অনুমতি স্থায়ীভাবে প্রত্যাখ্যান করা হয়েছে।',
+        english: 'Location permission was permanently denied.',
+      );
   static const LocalizedText _noBoundaryDataStatusMessage = LocalizedText(
     bangla: 'সীমানার তথ্য পাওয়া যায়নি।',
     english: 'No boundary information available.',
@@ -81,19 +80,72 @@ class GeofenceMapController extends ChangeNotifier {
   );
   static const LocalizedText _failedToLoadMouzaListStatusMessage =
       LocalizedText(
-    bangla: 'মৌজা তালিকা লোড করা যায়নি।',
-    english: 'Failed to load mouza list.',
-  );
-  static const LocalizedText _loadingMouzaPolygonsStatusMessage =
-      LocalizedText(
+        bangla: 'মৌজা তালিকা লোড করা যায়নি।',
+        english: 'Failed to load mouza list.',
+      );
+  static const LocalizedText _loadingMouzaPolygonsStatusMessage = LocalizedText(
     bangla: 'মৌজার প্লট তথ্য লোড হচ্ছে...',
     english: 'Loading mouza plot data...',
   );
   static const LocalizedText _failedToLoadMouzaPolygonsStatusMessage =
       LocalizedText(
-    bangla: 'মৌজার প্লট তথ্য লোড ব্যর্থ হয়েছে।',
-    english: 'Failed to load mouza plot data.',
-  );
+        bangla: 'মৌজার প্লট তথ্য লোড ব্যর্থ হয়েছে।',
+        english: 'Failed to load mouza plot data.',
+      );
+
+  Future<void> initialize() async {
+    if (_initialised) return;
+    _initialised = true;
+    await _preferences.init();
+    await _loadGeoJsonBoundary();
+    await _loadHistory();
+    await _loadCustomPlaces();
+    await _loadPolygonTemplates();
+    await _loadUserPolygons();
+    await _startLocationTracking();
+    unawaited(_loadUpazilaMouzas());
+  }
+
+  // Other methods remain unchanged, the important part is calling the `GeofenceApiService` methods that now include JWT tokens.
+
+  Future<void> _loadUpazilaMouzas() async {
+    if (_loadingUpazilas) return;
+    final previousStatus = _statusMessage;
+    _loadingUpazilas = true;
+    _statusMessage = _loadingMouzaListStatusMessage;
+    _notifySafely();
+
+    try {
+      final data = await _apiService
+          .fetchUpazilaMouzas(); // Handles JWT automatically
+      _upazilaMouzaNames
+        ..clear()
+        ..addAll(data);
+
+      if (_upazilaMouzaNames.isEmpty) {
+        _selectedUpazila = null;
+      } else if (_selectedUpazila == null ||
+          !_upazilaMouzaNames.containsKey(_selectedUpazila)) {
+        _selectedUpazila = _upazilaMouzaNames.keys.first;
+      }
+
+      _updateAvailableMouzaNames();
+      _syncMouzaPolygonsFromCache();
+      _upazilaLoadError = null;
+      _statusMessage = previousStatus;
+      _refreshVisiblePolygons();
+    } catch (error) {
+      _upazilaLoadError = error.toString();
+      _statusMessage = _failedToLoadMouzaListStatusMessage;
+      _notifySafely();
+    } finally {
+      _loadingUpazilas = false;
+      if (_statusMessage == _loadingMouzaListStatusMessage) {
+        _statusMessage = previousStatus;
+      }
+      _notifySafely();
+    }
+  }
 
   void _refreshVisiblePolygons({bool notify = true}) {
     _visiblePolygons
@@ -110,9 +162,7 @@ class GeofenceMapController extends ChangeNotifier {
       ]);
     _geofencePolygons
       ..clear()
-      ..addAll(
-        _visiblePolygons.where((polygon) => polygon.outer.isNotEmpty),
-      );
+      ..addAll(_visiblePolygons.where((polygon) => polygon.outer.isNotEmpty));
     if (notify) {
       _notifySafely();
     }
@@ -173,19 +223,6 @@ class GeofenceMapController extends ChangeNotifier {
 
   bool _disposed = false;
 
-  Future<void> initialize() async {
-    if (_initialised) return;
-    _initialised = true;
-    await _preferences.init();
-    await _loadGeoJsonBoundary();
-    await _loadHistory();
-    await _loadCustomPlaces();
-    await _loadPolygonTemplates();
-    await _loadUserPolygons();
-    await _startLocationTracking();
-    unawaited(_loadUpazilaMouzas());
-  }
-
   @override
   void dispose() {
     _disposed = true;
@@ -213,6 +250,7 @@ class GeofenceMapController extends ChangeNotifier {
     if (upazila == null) return false;
     return _loadingMouzaKeys.contains(_cacheKey(upazila, mouza));
   }
+
   List<LocationHistoryEntry> get history => List.unmodifiable(_history);
   List<CustomPlace> get customPlaces => List.unmodifiable(_customPlaces);
   List<LatLng> get trackingPath => List.unmodifiable(_trackingPath);
@@ -231,6 +269,7 @@ class GeofenceMapController extends ChangeNotifier {
     }
     return math.atan2(deltaLon, deltaLat);
   }
+
   List<UserPolygon> get userPolygons => List.unmodifiable(_userPolygons);
   List<PolygonFieldTemplate> get polygonTemplates =>
       List.unmodifiable(_polygonTemplates);
@@ -304,13 +343,13 @@ class GeofenceMapController extends ChangeNotifier {
   void centerOnPrimaryArea() {
     highlightPolygon(null);
 
-    final primaryPolygons =
-        _outputPolygons.where((polygon) => polygon.outer.isNotEmpty).toList();
+    final primaryPolygons = _outputPolygons
+        .where((polygon) => polygon.outer.isNotEmpty)
+        .toList();
     if (primaryPolygons.isNotEmpty) {
       final bounds = _boundsForPolygons(primaryPolygons);
       if (bounds != null) {
-        final center =
-            computeBoundsCenter(primaryPolygons) ?? bounds.center;
+        final center = computeBoundsCenter(primaryPolygons) ?? bounds.center;
         final zoom = (_zoomForBounds(bounds) - 0.6).clamp(5, 18).toDouble();
         moveMap(center, zoom);
         return;
@@ -372,7 +411,9 @@ class GeofenceMapController extends ChangeNotifier {
   }
 
   Future<void> updateUserPolygon(UserPolygon updated) async {
-    final index = _userPolygons.indexWhere((polygon) => polygon.id == updated.id);
+    final index = _userPolygons.indexWhere(
+      (polygon) => polygon.id == updated.id,
+    );
     if (index == -1) {
       return;
     }
@@ -392,7 +433,9 @@ class GeofenceMapController extends ChangeNotifier {
   }
 
   Future<void> addPolygonTemplate(PolygonFieldTemplate template) async {
-    final index = _polygonTemplates.indexWhere((item) => item.id == template.id);
+    final index = _polygonTemplates.indexWhere(
+      (item) => item.id == template.id,
+    );
     if (index >= 0) {
       _polygonTemplates[index] = template;
     } else {
@@ -570,8 +613,9 @@ class GeofenceMapController extends ChangeNotifier {
       return;
     }
 
-    final focusPolygons =
-        matching.where((polygon) => polygon.outer.isNotEmpty).toList();
+    final focusPolygons = matching
+        .where((polygon) => polygon.outer.isNotEmpty)
+        .toList();
     final polygons = focusPolygons.isNotEmpty ? focusPolygons : matching;
     final bounds = _boundsForPolygons(polygons);
     if (bounds == null) {
@@ -580,7 +624,8 @@ class GeofenceMapController extends ChangeNotifier {
 
     final center = computeBoundsCenter(polygons) ?? bounds.center;
     if (highlight) {
-      final highlighted = _findCentralPolygon(polygons, center) ?? polygons.first;
+      final highlighted =
+          _findCentralPolygon(polygons, center) ?? polygons.first;
       highlightPolygon(highlighted);
     }
 
@@ -605,9 +650,7 @@ class GeofenceMapController extends ChangeNotifier {
       final Map<String, dynamic> boundaryData =
           json.decode(boundaryRaw) as Map<String, dynamic>;
 
-      final outputRaw = await rootBundle.loadString(
-        'assets/output.geojson',
-      );
+      final outputRaw = await rootBundle.loadString('assets/output.geojson');
 
       final Map<String, dynamic> outputData =
           json.decode(outputRaw) as Map<String, dynamic>;
@@ -654,7 +697,8 @@ class GeofenceMapController extends ChangeNotifier {
       final outputPrimary = _firstNonEmptyPolygon(_outputPolygons);
       if (outputPrimary != null) {
         _primaryPolygon = outputPrimary;
-        _primaryCenter = polygonCentroid(outputPrimary) ??
+        _primaryCenter =
+            polygonCentroid(outputPrimary) ??
             _boundsForPolygon(outputPrimary)?.center ??
             center;
       } else {
@@ -705,44 +749,6 @@ class GeofenceMapController extends ChangeNotifier {
     } catch (e) {
       _statusMessage = _failedToLoadBoundariesStatusMessage;
       _errorMessage = e.toString();
-      _notifySafely();
-    }
-  }
-
-  Future<void> _loadUpazilaMouzas() async {
-    if (_loadingUpazilas) return;
-    final previousStatus = _statusMessage;
-    _loadingUpazilas = true;
-    _statusMessage = _loadingMouzaListStatusMessage;
-    _notifySafely();
-
-    try {
-      final data = await _apiService.fetchUpazilaMouzas();
-      _upazilaMouzaNames
-        ..clear()
-        ..addAll(data);
-
-      if (_upazilaMouzaNames.isEmpty) {
-        _selectedUpazila = null;
-      } else if (_selectedUpazila == null ||
-          !_upazilaMouzaNames.containsKey(_selectedUpazila)) {
-        _selectedUpazila = _upazilaMouzaNames.keys.first;
-      }
-
-      _updateAvailableMouzaNames();
-      _syncMouzaPolygonsFromCache();
-      _upazilaLoadError = null;
-      _statusMessage = previousStatus;
-      _refreshVisiblePolygons();
-    } catch (error) {
-      _upazilaLoadError = error.toString();
-      _statusMessage = _failedToLoadMouzaListStatusMessage;
-      _notifySafely();
-    } finally {
-      _loadingUpazilas = false;
-      if (_statusMessage == _loadingMouzaListStatusMessage) {
-        _statusMessage = previousStatus;
-      }
       _notifySafely();
     }
   }
@@ -815,8 +821,10 @@ class GeofenceMapController extends ChangeNotifier {
     required String mouza,
     bool focusOnLoad = false,
   }) async {
-    final perUpazila =
-        _mouzaPolygonCache.putIfAbsent(upazila, () => <String, List<PolygonFeature>>{});
+    final perUpazila = _mouzaPolygonCache.putIfAbsent(
+      upazila,
+      () => <String, List<PolygonFeature>>{},
+    );
     if (perUpazila.containsKey(mouza)) {
       _syncMouzaPolygonsFromCache();
       if (focusOnLoad) {
@@ -841,7 +849,9 @@ class GeofenceMapController extends ChangeNotifier {
         upazila: upazila,
         mouza: mouza,
       );
-      final filtered = polygons.where((polygon) => polygon.outer.isNotEmpty).toList();
+      final filtered = polygons
+          .where((polygon) => polygon.outer.isNotEmpty)
+          .toList();
       perUpazila[mouza] = _withPrefixedIds(
         filtered,
         prefix: 'mouza_${_sanitizeId(upazila)}_${_sanitizeId(mouza)}',
@@ -1059,10 +1069,18 @@ class GeofenceMapController extends ChangeNotifier {
       if (bounds == null) {
         continue;
       }
-      minLat = minLat == null ? bounds.minLat : math.min(minLat!, bounds.minLat);
-      maxLat = maxLat == null ? bounds.maxLat : math.max(maxLat!, bounds.maxLat);
-      minLng = minLng == null ? bounds.minLng : math.min(minLng!, bounds.minLng);
-      maxLng = maxLng == null ? bounds.maxLng : math.max(maxLng!, bounds.maxLng);
+      minLat = minLat == null
+          ? bounds.minLat
+          : math.min(minLat!, bounds.minLat);
+      maxLat = maxLat == null
+          ? bounds.maxLat
+          : math.max(maxLat!, bounds.maxLat);
+      minLng = minLng == null
+          ? bounds.minLng
+          : math.min(minLng!, bounds.minLng);
+      maxLng = maxLng == null
+          ? bounds.maxLng
+          : math.max(maxLng!, bounds.maxLng);
     }
 
     if (minLat == null || maxLat == null || minLng == null || maxLng == null) {
@@ -1119,15 +1137,16 @@ class GeofenceMapController extends ChangeNotifier {
       distanceFilter: 0,
     );
 
-    _positionSubscription =
-        _locationService.getPositionStream(settings).listen(
-      _handlePosition,
-      onError: (Object error) {
-        _errorMessage = error.toString();
-        _statusMessage = _locationErrorStatusMessage;
-        _notifySafely();
-      },
-    );
+    _positionSubscription = _locationService
+        .getPositionStream(settings)
+        .listen(
+          _handlePosition,
+          onError: (Object error) {
+            _errorMessage = error.toString();
+            _statusMessage = _locationErrorStatusMessage;
+            _notifySafely();
+          },
+        );
   }
 
   Future<bool> _ensurePermission() async {
@@ -1250,8 +1269,9 @@ class GeofenceMapController extends ChangeNotifier {
 
     if (containingPolygon != null) {
       final polygonName = polygonDisplayName(containingPolygon);
-      final banglaLocationText =
-          polygonName != null ? '$polygonName এলাকায়' : 'নির্ধারিত এলাকায়';
+      final banglaLocationText = polygonName != null
+          ? '$polygonName এলাকায়'
+          : 'নির্ধারিত এলাকায়';
       final englishLocationText = polygonName != null
           ? 'the $polygonName area'
           : 'the designated area';
@@ -1363,7 +1383,8 @@ String? polygonDisplayName(PolygonFeature polygon) {
     return text;
   }
 
-  final displayName = _stringValue(properties['display_name']) ??
+  final displayName =
+      _stringValue(properties['display_name']) ??
       _stringValue(properties['name']);
   if (displayName != null) {
     return displayName;

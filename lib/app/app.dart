@@ -1,6 +1,7 @@
+import 'package:balumohol/features/authorization/presentation/pages/login_page.dart';
+import 'package:balumohol/features/authorization/providers/auth_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import 'package:balumohol/core/language/language_controller.dart';
 import 'package:balumohol/core/location/location_service.dart';
 import 'package:balumohol/core/storage/preferences_service.dart';
@@ -15,9 +16,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(
-          create: (_) => LanguageController(),
-        ),
+        ChangeNotifierProvider(create: (_) => LanguageController()),
         ChangeNotifierProvider(
           create: (_) => GeofenceMapController(
             locationService: const GeolocatorLocationService(),
@@ -25,6 +24,7 @@ class MyApp extends StatelessWidget {
             apiService: GeofenceApiService(),
           ),
         ),
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
       ],
       child: MaterialApp(
         title: 'জিওফেন্স মানচিত্র',
@@ -32,7 +32,17 @@ class MyApp extends StatelessWidget {
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
           useMaterial3: true,
         ),
-        home: const GeofenceMapPage(),
+        // Add condition for login state
+        home: Consumer<AuthProvider>(
+          builder: (context, authProvider, child) {
+            print(authProvider.token);
+            if (authProvider.token != null) {
+              return const GeofenceMapPage(); // User is logged in
+            } else {
+              return const LoginPage(); // Show login page
+            }
+          },
+        ),
       ),
     );
   }

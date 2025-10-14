@@ -1,28 +1,56 @@
 import 'dart:convert';
-
-import 'package:http/http.dart' as http;
-
+import 'package:balumohol/features/authorization/utils/auth_storage.dart';
 import 'package:balumohol/features/geofence/models/polygon_feature.dart';
 import 'package:balumohol/features/geofence/utils/geo_utils.dart';
 import 'package:balumohol/features/geofence/utils/wkb_decoder.dart';
+import 'package:http/http.dart' as http;
+import 'package:balumohol/core/storage/preferences_service.dart';
+
+// Define GeofenceApiException if not already defined elsewhere
+class GeofenceApiException implements Exception {
+  final String message;
+  final int? statusCode;
+  final Uri? uri;
+  final String? body;
+
+  GeofenceApiException(this.message, {this.statusCode, this.uri, this.body});
+
+  @override
+  String toString() =>
+      'GeofenceApiException: $message'
+      '${statusCode != null ? ' (HTTP $statusCode)' : ''}'
+      '${uri != null ? ' [uri: $uri]' : ''}'
+      '${body != null ? '\nResponse body: $body' : ''}';
+}
 
 class GeofenceApiService {
-  GeofenceApiService({
-    http.Client? httpClient,
-    Uri? baseUri,
-  })  : _httpClient = httpClient ?? http.Client(),
-        _baseUri = baseUri ?? Uri.parse(_defaultBaseUrl);
+  GeofenceApiService({http.Client? httpClient, Uri? baseUri})
+    : _httpClient = httpClient ?? http.Client(),
+      _baseUri = baseUri ?? Uri.parse(_defaultBaseUrl);
 
-  static const String _defaultBaseUrl = 'http://192.168.31.101:8080';
+  static const String _defaultBaseUrl = 'http://192.168.68.133:8080';
 
   final http.Client _httpClient;
   final Uri _baseUri;
 
+  // Method to get the stored JWT token from preferences
+  Future<String?> _getJwtToken() async {
+    // Replace 'getToken' with the correct method name or implement it in SharedPreferencesService
+    return await AuthStorage.getToken();
+  }
+
+  // Fetch Upazila Mouzas
   Future<Map<String, List<String>>> fetchUpazilaMouzas() async {
     final uri = _buildUri(const ['api', 'map', 'upazila']);
+    final token = await _getJwtToken();
+
     final response = await _httpClient.get(
       uri,
-      headers: const {'accept': 'application/json'},
+      headers: {
+        'accept': 'application/json',
+        if (token != null)
+          'Authorization': 'Bearer $token', // Include JWT in header
+      },
     );
 
     if (response.statusCode != 200) {
@@ -52,9 +80,7 @@ class GeofenceApiService {
                 mouzas.add(name);
               }
             }
-            mouzas.sort(
-              (a, b) => a.toLowerCase().compareTo(b.toLowerCase()),
-            );
+            mouzas.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
             result[key] = mouzas;
           }
         }
@@ -64,21 +90,22 @@ class GeofenceApiService {
     return result;
   }
 
+  // Fetch Mouza Polygons
   Future<List<PolygonFeature>> fetchMouzaPolygons({
     required String upazila,
     required String mouza,
   }) async {
-    final segments = [
-      'api',
-      'map',
-      'plots',
-      upazila,
-      mouza,
-    ];
+    final segments = ['api', 'map', 'plots', upazila, mouza];
     final uri = _buildUri(segments);
+    final token = await _getJwtToken();
+
     final response = await _httpClient.get(
       uri,
-      headers: const {'accept': 'application/json'},
+      headers: {
+        'accept': 'application/json',
+        if (token != null)
+          'Authorization': 'Bearer $token', // Include JWT in header
+      },
     );
 
     if (response.statusCode != 200) {
@@ -131,11 +158,7 @@ class GeofenceApiService {
       final featureCollection = {
         'type': 'FeatureCollection',
         'features': [
-          {
-            'type': 'Feature',
-            'geometry': geometry,
-            'properties': properties,
-          },
+          {'type': 'Feature', 'geometry': geometry, 'properties': properties},
         ],
       };
 
@@ -161,20 +184,18 @@ class GeofenceApiService {
     return features;
   }
 
+  // Dispose HTTP client
   void dispose() {
     _httpClient.close();
   }
 
+  // Helper function to build URI
   Uri _buildUri(List<String> segments) {
     final baseSegments = _baseUri.pathSegments.where((s) => s.isNotEmpty);
-    return _baseUri.replace(
-      pathSegments: [
-        ...baseSegments,
-        ...segments,
-      ],
-    );
+    return _baseUri.replace(pathSegments: [...baseSegments, ...segments]);
   }
 
+  // Helper function to normalize properties
   Map<String, dynamic> _normaliseProperties(
     Object? raw, {
     required String upazila,
@@ -208,6 +229,7 @@ class GeofenceApiService {
     return props;
   }
 
+  // Helper function to build feature ID
   String _buildFeatureId({
     required Map<String, dynamic> properties,
     required int fallbackIndex,
@@ -220,35 +242,10 @@ class GeofenceApiService {
     return '${mouza}_$base${partIndex == 0 ? '' : '_$partIndex'}';
   }
 
+  // Helper function to check if a value is empty
   bool _isEmpty(Object? value) {
     if (value == null) return true;
     if (value is String) return value.trim().isEmpty;
     return false;
-  }
-}
-
-class GeofenceApiException implements Exception {
-  GeofenceApiException(
-    this.message, {
-    this.statusCode,
-    this.uri,
-    this.body,
-  });
-
-  final String message;
-  final int? statusCode;
-  final Uri? uri;
-  final String? body;
-
-  @override
-  String toString() {
-    final buffer = StringBuffer('GeofenceApiException: $message');
-    if (statusCode != null) {
-      buffer.write(' (statusCode: $statusCode)');
-    }
-    if (uri != null) {
-      buffer.write(' [uri: $uri]');
-    }
-    return buffer.toString();
   }
 }

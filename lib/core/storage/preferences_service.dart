@@ -13,6 +13,9 @@ abstract class PreferencesService {
   Future<bool> setString(String key, String value);
 
   Future<bool> setStringList(String key, List<String> values);
+
+  // Add a method to get JWT token
+  Future<String?> getToken();
 }
 
 class SharedPreferencesService implements PreferencesService {
@@ -49,5 +52,11 @@ class SharedPreferencesService implements PreferencesService {
   @override
   Future<bool> setStringList(String key, List<String> values) {
     return _prefs.setStringList(key, values);
+  }
+
+  // Method to get JWT token from SharedPreferences
+  @override
+  Future<String?> getToken() async {
+    return _prefs.getString('jwt_token');
   }
 }
