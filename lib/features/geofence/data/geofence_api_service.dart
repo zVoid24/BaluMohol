@@ -28,7 +28,7 @@ class GeofenceApiService {
     : _httpClient = httpClient ?? http.Client(),
       _baseUri = baseUri ?? Uri.parse(_defaultBaseUrl);
 
-  static const String _defaultBaseUrl = 'http://192.168.68.133:8080';
+  static const String _defaultBaseUrl = 'http://192.168.0.172:8080';
 
   final http.Client _httpClient;
   final Uri _baseUri;
@@ -42,6 +42,7 @@ class GeofenceApiService {
   // Fetch Upazila Mouzas
   Future<Map<String, List<String>>> fetchUpazilaMouzas() async {
     final uri = _buildUri(const ['api', 'map', 'upazila']);
+    print(uri);
     final token = await _getJwtToken();
 
     final response = await _httpClient.get(

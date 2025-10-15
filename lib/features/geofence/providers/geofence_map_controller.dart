@@ -579,7 +579,7 @@ class GeofenceMapController extends ChangeNotifier {
     _notifySafely();
   }
 
-  void focusPolygon(PolygonFeature polygon, {bool highlight = true}) {
+  void focusPolygon(PolygonFeature polygon, {bool highlight = false}) {
     if (highlight) {
       highlightPolygon(polygon);
     }

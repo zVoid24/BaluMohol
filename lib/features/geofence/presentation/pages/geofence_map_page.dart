@@ -338,6 +338,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
                       accuracyText: accuracyText,
                       statusMessage: statusMessageText,
                       errorMessage: controller.errorMessage,
+                      onLogout: () => _handleLogout(language),
                     ),
                     const SizedBox(height: 12),
                     Column(
@@ -621,16 +622,16 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
         controller.primaryCenter ??
         controller.fallbackCenter;
 
-    final creationResult =
-        await Navigator.of(context).push<PolygonCreationResult>(
-      MaterialPageRoute(
-        builder: (context) => DrawPolygonPage(
-          initialCenter: initialCenter,
-          tileUrlTemplate: _selectedBaseLayer.urlTemplate,
-          tileSubdomains: _selectedBaseLayer.subdomains,
-        ),
-      ),
-    );
+    final creationResult = await Navigator.of(context)
+        .push<PolygonCreationResult>(
+          MaterialPageRoute(
+            builder: (context) => DrawPolygonPage(
+              initialCenter: initialCenter,
+              tileUrlTemplate: _selectedBaseLayer.urlTemplate,
+              tileSubdomains: _selectedBaseLayer.subdomains,
+            ),
+          ),
+        );
 
     if (!mounted || creationResult == null) {
       return;
@@ -682,9 +683,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
       messages.add(templateMessage);
     }
 
-    messenger.showSnackBar(
-      SnackBar(content: Text(messages.join('\n'))),
-    );
+    messenger.showSnackBar(SnackBar(content: Text(messages.join('\n'))));
   }
 
   Future<void> _toggleTracking(GeofenceMapController controller) async {
@@ -859,11 +858,9 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
 
   Future<void> _openUserManual() async {
     Scaffold.maybeOf(context)?.closeDrawer();
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => const UserManualPage(),
-      ),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const UserManualPage()));
   }
 
   Future<void> _showCustomPlaceDetails(
@@ -1249,9 +1246,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: Text(
-            _text(language, 'পলিগন মুছবেন?', 'Delete polygon?'),
-          ),
+          title: Text(_text(language, 'পলিগন মুছবেন?', 'Delete polygon?')),
           content: Text(
             _text(
               language,
@@ -1318,7 +1313,11 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
       builder: (dialogContext) {
         return AlertDialog(
           title: Text(
-            _text(language, 'টেমপ্লেট হিসাবে সংরক্ষণ করবেন?', 'Save as template?'),
+            _text(
+              language,
+              'টেমপ্লেট হিসাবে সংরক্ষণ করবেন?',
+              'Save as template?',
+            ),
           ),
           content: Text(
             _text(
@@ -1352,10 +1351,8 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
 
     final templateName = await showDialog<String>(
       context: context,
-      builder: (context) => _TemplateNameDialog(
-        language: language,
-        initialName: defaultName,
-      ),
+      builder: (context) =>
+          _TemplateNameDialog(language: language, initialName: defaultName),
     );
     if (!mounted || templateName == null) {
       return null;
@@ -1652,8 +1649,10 @@ class _MapSidebar extends StatelessWidget {
                             child: DropdownButtonFormField<String>(
                               value: selectedUpazila,
                               decoration: InputDecoration(
-                                labelText:
-                                    _text('উপজেলা নির্বাচন করুন', 'Select upazila'),
+                                labelText: _text(
+                                  'উপজেলা নির্বাচন করুন',
+                                  'Select upazila',
+                                ),
                                 border: const OutlineInputBorder(),
                                 isDense: true,
                               ),
@@ -1720,8 +1719,8 @@ class _MapSidebar extends StatelessWidget {
                                     OutlinedButton.icon(
                                       onPressed:
                                           selectedMouzas.length == mouzas.length
-                                              ? null
-                                              : onSelectAllMouzas,
+                                          ? null
+                                          : onSelectAllMouzas,
                                       icon: const Icon(Icons.select_all),
                                       label: Text(
                                         _text('সব নির্বাচন করুন', 'Select all'),
@@ -1743,8 +1742,8 @@ class _MapSidebar extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 12),
                                 ...mouzas.map((mouza) {
-                                  final isMouzaLoading =
-                                      controller.isMouzaLoading(mouza);
+                                  final isMouzaLoading = controller
+                                      .isMouzaLoading(mouza);
                                   return CheckboxListTile(
                                     value: selectedMouzas.contains(mouza),
                                     title: Text(_formatLabel(mouza)),
@@ -2121,6 +2120,7 @@ class _StatusPanel extends StatelessWidget {
     required this.accuracyText,
     required this.statusMessage,
     this.errorMessage,
+    required this.onLogout,
   });
 
   final AppLanguage language;
@@ -2129,6 +2129,7 @@ class _StatusPanel extends StatelessWidget {
   final String accuracyText;
   final String statusMessage;
   final String? errorMessage;
+  final VoidCallback onLogout;
 
   String _text(String bangla, String english) {
     return language.isBangla ? bangla : english;
@@ -2250,32 +2251,32 @@ class _StatusPanel extends StatelessWidget {
                             color: language.isBangla
                                 ? Colors.red
                                 : theme.colorScheme.error,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 32),
+                      const Divider(height: 1),
+                      const SizedBox(height: 24),
+                      Text(
+                        _text('অ্যাকাউন্ট', 'Account'),
+                        style: theme.textTheme.titleMedium,
                       ),
-                    ),
-                  ],
-                  const SizedBox(height: 32),
-                  const Divider(height: 1),
-                  const SizedBox(height: 24),
-                  Text(
-                    _text('অ্যাকাউন্ট', 'Account'),
-                    style: theme.textTheme.titleMedium,
+                      const SizedBox(height: 12),
+                      FilledButton.tonalIcon(
+                        onPressed: () {
+                          Scaffold.maybeOf(context)?.closeDrawer();
+                          onLogout();
+                        },
+                        icon: const Icon(Icons.logout_rounded),
+                        label: Text(_text('লগ আউট', 'Log out')),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: theme.colorScheme.errorContainer,
+                          foregroundColor: theme.colorScheme.onErrorContainer,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                  FilledButton.tonalIcon(
-                    onPressed: () {
-                      Scaffold.maybeOf(context)?.closeDrawer();
-                      onLogout();
-                    },
-                    icon: const Icon(Icons.logout_rounded),
-                    label: Text(_text('লগ আউট', 'Log out')),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: theme.colorScheme.errorContainer,
-                      foregroundColor: theme.colorScheme.onErrorContainer,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+                ),
               ),
             ),
     );

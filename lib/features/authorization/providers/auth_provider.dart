@@ -25,7 +25,7 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  final String baseUrl = "http://192.168.68.133:8080/api/auth";
+  final String baseUrl = "http://192.168.0.172:8080/api/auth";
 
   Future<bool> login({
     String? email,
