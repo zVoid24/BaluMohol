@@ -35,12 +35,17 @@ class MyApp extends StatelessWidget {
         // Add condition for login state
         home: Consumer<AuthProvider>(
           builder: (context, authProvider, child) {
-            print(authProvider.token);
-            if (authProvider.token != null) {
-              return const GeofenceMapPage(); // User is logged in
-            } else {
-              return const LoginPage(); // Show login page
+            if (authProvider.isRestoringSession) {
+              return const Scaffold(
+                body: Center(
+                  child: CircularProgressIndicator(),
+                ),
+              );
             }
+            if (authProvider.token != null) {
+              return const GeofenceMapPage();
+            }
+            return const LoginPage();
           },
         ),
       ),

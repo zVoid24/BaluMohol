@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
+import 'package:balumohol/features/authorization/providers/auth_provider.dart';
 import 'package:balumohol/core/language/language_controller.dart';
 import 'package:balumohol/core/language/localized_text.dart';
 import 'package:balumohol/core/utils/formatting.dart';
@@ -221,6 +222,7 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
           onToggleBoundary: controller.setShowBoundary,
           onToggleOtherPolygons: controller.setShowOtherPolygons,
           onOpenUserManual: _openUserManual,
+          onLogout: () => _handleLogout(language),
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
@@ -387,6 +389,25 @@ class _GeofenceMapPageState extends State<GeofenceMapPage> {
         ],
       ),
     );
+  }
+
+  Future<void> _handleLogout(AppLanguage language) async {
+    await context.read<AuthProvider>().logout();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            _text(
+              language,
+              'আপনি সফলভাবে লগ আউট করেছেন',
+              'Signed out successfully',
+            ),
+          ),
+        ),
+      );
   }
 
   List<Polygon> _buildPolygons(GeofenceMapController controller) {
@@ -1427,6 +1448,7 @@ class _MapSidebar extends StatelessWidget {
     required this.onToggleBoundary,
     required this.onToggleOtherPolygons,
     required this.onOpenUserManual,
+    required this.onLogout,
   });
 
   final GeofenceMapController controller;
@@ -1443,6 +1465,7 @@ class _MapSidebar extends StatelessWidget {
   final ValueChanged<bool> onToggleBoundary;
   final ValueChanged<bool> onToggleOtherPolygons;
   final VoidCallback onOpenUserManual;
+  final VoidCallback onLogout;
 
   static const List<LocalizedText> _balumohalInformationItems = <LocalizedText>[
     LocalizedText(bangla: 'ড্রেজারের লোকেশন', english: 'Dredger locations'),
@@ -2227,12 +2250,32 @@ class _StatusPanel extends StatelessWidget {
                             color: language.isBangla
                                 ? Colors.red
                                 : theme.colorScheme.error,
-                          ),
-                        ),
-                      ],
-                    ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 32),
+                  const Divider(height: 1),
+                  const SizedBox(height: 24),
+                  Text(
+                    _text('অ্যাকাউন্ট', 'Account'),
+                    style: theme.textTheme.titleMedium,
                   ),
-                ),
+                  const SizedBox(height: 12),
+                  FilledButton.tonalIcon(
+                    onPressed: () {
+                      Scaffold.maybeOf(context)?.closeDrawer();
+                      onLogout();
+                    },
+                    icon: const Icon(Icons.logout_rounded),
+                    label: Text(_text('লগ আউট', 'Log out')),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: theme.colorScheme.errorContainer,
+                      foregroundColor: theme.colorScheme.onErrorContainer,
+                    ),
+                  ),
+                ],
+              ),
+            ),
               ),
             ),
     );
