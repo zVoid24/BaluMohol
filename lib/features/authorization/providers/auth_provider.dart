@@ -4,11 +4,26 @@ import 'package:http/http.dart' as http;
 import '../utils/auth_storage.dart';
 
 class AuthProvider with ChangeNotifier {
+  AuthProvider() {
+    _restoreSession();
+  }
+
   String? _token;
   Map<String, dynamic>? _user;
+  bool _isRestoringSession = true;
 
   String? get token => _token;
   Map<String, dynamic>? get user => _user;
+  bool get isRestoringSession => _isRestoringSession;
+
+  Future<void> _restoreSession() async {
+    final savedToken = await AuthStorage.getToken();
+    if (savedToken != null) {
+      _token = savedToken;
+    }
+    _isRestoringSession = false;
+    notifyListeners();
+  }
 
   final String baseUrl = "http://192.168.68.133:8080/api/auth";
 
@@ -32,10 +47,12 @@ class AuthProvider with ChangeNotifier {
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      print(data);
       _token = data["token"];
       _user = data["user"];
       await AuthStorage.saveToken(_token!);
+      if (_isRestoringSession) {
+        _isRestoringSession = false;
+      }
       notifyListeners();
       return true;
     } else {
@@ -69,6 +86,9 @@ class AuthProvider with ChangeNotifier {
       _token = data["token"];
       _user = data["user"];
       await AuthStorage.saveToken(_token!);
+      if (_isRestoringSession) {
+        _isRestoringSession = false;
+      }
       notifyListeners();
       return true;
     } else {
@@ -81,6 +101,9 @@ class AuthProvider with ChangeNotifier {
     _token = null;
     _user = null;
     await AuthStorage.clearToken();
+    if (_isRestoringSession) {
+      _isRestoringSession = false;
+    }
     notifyListeners();
   }
 }
